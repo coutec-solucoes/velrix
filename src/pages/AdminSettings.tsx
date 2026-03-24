@@ -108,7 +108,7 @@ interface SqlBlockStatus {
 
 export default function AdminSettingsPage() {
   const [tab, setTab] = useState<Tab>('supabase');
-  const [settings, setSettings] = useState<AdminSettings>({ supabaseUrl: '', supabaseAnonKey: '', brandName: 'Veltor', brandLogo: '' });
+  const [settings, setSettings] = useState<AdminSettings>({ supabaseUrl: '', supabaseAnonKey: '', brandName: 'Velrix', brandLogo: '' });
   const [plans, setPlans] = useState<SaasPlan[]>([]);
   const [logs, setLogs] = useState<AdminActivityLog[]>([]);
   const [saved, setSaved] = useState(false);
@@ -917,7 +917,7 @@ CREATE POLICY "Admin can manage settings"
         <div className="bg-white/5 border border-white/10 rounded-xl p-5 space-y-4 max-w-2xl">
           <div className="flex items-center gap-2 text-white/70 text-sm"><Palette size={16} className="text-secondary" /> Personalização</div>
           <div className="space-y-3">
-            <div><label className="text-white/50 text-xs mb-1 block">Nome do Sistema</label><input value={settings.brandName} onChange={e => setSettings(s => ({ ...s, brandName: e.target.value }))} placeholder="Veltor" className={inputClass} /></div>
+            <div><label className="text-white/50 text-xs mb-1 block">Nome do Sistema</label><input value={settings.brandName} onChange={e => setSettings(s => ({ ...s, brandName: e.target.value }))} placeholder="Velrix" className={inputClass} /></div>
             <div><label className="text-white/50 text-xs mb-1 block">URL do Logo</label><input value={settings.brandLogo} onChange={e => setSettings(s => ({ ...s, brandLogo: e.target.value }))} placeholder="https://..." className={inputClass} /></div>
           </div>
           <div className="flex items-center gap-3">

@@ -5,7 +5,7 @@ const ADMIN_SETTINGS_CACHE_KEY = 'veltor_admin_settings_cache';
 const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   supabaseUrl: '',
   supabaseAnonKey: '',
-  brandName: 'Veltor',
+  brandName: 'Velrix',
   brandLogo: '',
   pixKey: '',
   pixMerchantName: '',

@@ -151,7 +151,7 @@ export function updateAdminSettings(updates: Partial<AdminSettings>) {
 
 // Defaults
 function defaultSettings(): AdminSettings {
-  return { supabaseUrl: '', supabaseAnonKey: '', brandName: 'Veltor', brandLogo: '' };
+  return { supabaseUrl: '', supabaseAnonKey: '', brandName: 'Velrix', brandLogo: '' };
 }
 
 function generateSampleCompanies(): SaasCompany[] {

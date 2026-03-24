@@ -182,7 +182,7 @@ export default function Register({ onBackToLogin }: Props) {
       >
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20" style={{ backgroundImage: `url(${veltorBg})` }} />
         <div className="w-full max-w-sm flex flex-col items-center relative z-10">
-          <img src={veltorLogo} alt="Veltor" className="w-3/4 max-w-[200px] h-auto drop-shadow-lg mb-6" />
+          <img src={veltorLogo} alt="Velrix" className="w-3/4 max-w-[200px] h-auto drop-shadow-lg mb-6" />
           <div className="w-full bg-black/40 backdrop-blur-md rounded-xl border border-white/10 p-6 space-y-4 shadow-2xl text-center">
             <div className="text-4xl mb-2">✉️</div>
             <h2 className="text-white font-semibold text-lg">Verifique seu email</h2>

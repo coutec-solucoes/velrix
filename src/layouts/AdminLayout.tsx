@@ -39,7 +39,7 @@ export default function AdminLayout() {
       <header className="border-b border-white/10 bg-black/30 backdrop-blur-md sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img src={veltorLogo} alt="Veltor" className="h-7" />
+            <img src={veltorLogo} alt="Velrix" className="h-7" />
             <span className="text-white/40 text-xs uppercase tracking-widest hidden sm:inline">Admin</span>
             <nav className="flex items-center gap-1 ml-4">
               {navItems.map(item => {

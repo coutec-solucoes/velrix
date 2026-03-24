@@ -84,11 +84,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
     try {
       const data = getAppData();
       return {
-        name: data.settings?.company?.name || 'VELTOR',
+        name: data.settings?.company?.name || 'VELRIX',
         logo: data.settings?.company?.logo || null,
       };
     } catch {
-      return { name: 'VELTOR', logo: null };
+      return { name: 'VELRIX', logo: null };
     }
   }, [location.pathname]); // refresh on route change
 
@@ -131,7 +131,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               {companyBranding.logo ? (
                 <img src={companyBranding.logo} alt={companyBranding.name} className="w-8 h-8 object-contain" />
               ) : (
-                <img src={veltorIcon} alt="VELTOR" className="w-8 h-8 object-contain" />
+                <img src={veltorIcon} alt="VELRIX" className="w-8 h-8 object-contain" />
               )}
             </div>
             <span

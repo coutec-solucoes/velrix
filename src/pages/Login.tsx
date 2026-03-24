@@ -174,7 +174,7 @@ export default function Login() {
       <div className="w-full max-w-sm flex flex-col items-center relative z-10">
         <img
           src={veltorLogo}
-          alt="Veltor"
+          alt="Velrix"
           className="w-full max-w-sm h-auto drop-shadow-lg mb-4 sm:mb-6"
         />
 
