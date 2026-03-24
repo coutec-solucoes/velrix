@@ -38,7 +38,6 @@ interface AuthContextType {
   session: Session | null;
   login: (email: string, password: string) => Promise<string | null>;
   loginCollaborator: (companyCode: string, username: string, password: string) => Promise<string | null>;
-  loginAsCollaborator: (data: CollaboratorData) => void;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -189,27 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
         }, 0);
       } else {
-        // Check for collaborator session
-        const savedCollab = sessionStorage.getItem('veltor_collaborator');
-        if (savedCollab) {
-          try {
-            const data = JSON.parse(savedCollab);
-            setProfile({
-              id: data.id,
-              name: data.name,
-              email: data.email || '',
-              role: data.role,
-              company_id: data.companyId,
-              company_name: data.companyName,
-              created_at: new Date().toISOString(),
-              permissions: data.permissions || undefined,
-              is_collaborator: true,
-              collaborator_id: data.id,
-            });
-          } catch { /* ignore */ }
-        } else {
-          setProfile(null);
-        }
+        setProfile(null);
         stopCompanyPolling();
         stopRealtimeSync();
         setSuspendedCompany(null);
@@ -238,25 +217,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
         });
       } else {
-        // Check for collaborator session
-        const savedCollab = sessionStorage.getItem('veltor_collaborator');
-        if (savedCollab) {
-          try {
-            const data = JSON.parse(savedCollab);
-            setProfile({
-              id: data.id,
-              name: data.name,
-              email: data.email || '',
-              role: data.role,
-              company_id: data.companyId,
-              company_name: data.companyName,
-              created_at: new Date().toISOString(),
-              permissions: data.permissions || undefined,
-              is_collaborator: true,
-              collaborator_id: data.id,
-            });
-          } catch { /* ignore */ }
-        }
         setIsLoading(false);
       }
     });
@@ -283,23 +243,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await checkCompanyStatus();
     }
     return null;
-  };
-
-  const loginAsCollaborator = (data: CollaboratorData) => {    const collaboratorProfile: UserProfile = {
-      id: data.id,
-      name: data.name,
-      email: data.email,
-      role: data.role,
-      company_id: data.companyId,
-      company_name: data.companyName,
-      created_at: new Date().toISOString(),
-      permissions: data.permissions || undefined,
-      is_collaborator: true,
-      collaborator_id: data.id,
-    };
-    setProfile(collaboratorProfile);
-    // Store in sessionStorage for page refreshes
-    sessionStorage.setItem('veltor_collaborator', JSON.stringify(data));
   };
 
   const loginCollaborator = async (companyCode: string, username: string, password: string): Promise<string | null> => {
@@ -361,12 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return null; // SignIn successful
         }
 
-        // Fallback legacy final
-        loginAsCollaborator({
-          id: collab.id, name: collab.name, email: collab.email || '',
-          role: collab.role, permissions: collab.permissions,
-          companyId: collab.companyId, companyName: collab.companyName,
-        });
+        return 'Falha ao autenticar sessão nativa.';
       }
       return null;
     }
@@ -384,12 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: sess2 } = await supabase.auth.getSession();
         if (sess2?.session) return null;
         
-        loginAsCollaborator({
-          id: collab.id, name: collab.name, email: collab.email || '',
-          role: collab.role, permissions: collab.permissions,
-          companyId: collab.companyId, companyName: collab.companyName,
-        });
-        return null;
+        return 'Falha ao autenticar via OTP.';
       }
       return null;
     }
@@ -407,13 +340,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSupabaseUser(null);
     setSession(null);
     setSuspendedCompany(null);
-    sessionStorage.removeItem('veltor_collaborator');
     initializedForUser.current = null;
     clearCompanyCache();
   };
-
-  // On mount, restore collaborator session if exists
-  const isCollaboratorSession = !!sessionStorage.getItem('veltor_collaborator') && !session;
 
   return (
     <AuthContext.Provider
@@ -423,9 +352,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         login,
         loginCollaborator,
-        loginAsCollaborator,
         logout,
-        isAuthenticated: (!!session && !!profile) || (!!profile && isCollaboratorSession),
+        isAuthenticated: (!!session && !!profile),
         isLoading,
         suspendedCompany,
       }}

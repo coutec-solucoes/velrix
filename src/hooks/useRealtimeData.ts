@@ -1,51 +1,48 @@
-import { useEffect, useState, useCallback } from 'react';
-import { onDataChange, getData, startRealtimeSync } from '@/services/storageService';
+import { useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { startRealtimeSync, getAppData, onDataChange } from '@/services/storageService';
 import { AppData } from '@/types';
+import { queryClient } from '@/lib/queryClient';
 
 /**
  * Hook that auto-refreshes data when Supabase Realtime events arrive.
- * Usage: const [clients, refresh] = useRealtimeData('clients');
+ * Migrated to use React Query for scalable, robust in-memory caching.
  */
 export function useRealtimeData<K extends keyof AppData>(key: K): [AppData[K], () => void] {
-  const [data, setData] = useState<AppData[K]>(() => getData(key));
+  const { data, refetch } = useQuery({
+    queryKey: ['appData', key],
+    queryFn: () => getAppData()[key],
+    initialData: () => getAppData()[key],
+    staleTime: Infinity, // The cache is synchronously updated by storageService
+  });
 
   const refresh = useCallback(() => {
-    setData(getData(key));
-  }, [key]);
+    // Explicit refresh updates the React Query cache
+    queryClient.setQueryData(['appData', key], getAppData()[key]);
+    refetch();
+  }, [key, refetch]);
 
   useEffect(() => {
-    // Sync current cache immediately (handles case where pull already completed)
-    setData(getData(key));
-
+    // We start the realtime sync on mount if it hasn't been started
     void startRealtimeSync();
 
-    const tableMap: Record<string, string> = {
-      users: 'users',
-      clients: 'clients',
-      transactions: 'transactions',
-      contracts: 'contracts',
-      categories: 'categories',
-      bankAccounts: 'bank_accounts',
-      cashMovements: 'cash_movements',
-      auditLogs: 'audit_logs',
-    };
-    const table = tableMap[key as string];
+    // Ensure React Query has the latest snapshot on mount
+    refresh();
 
-    // Listen for ALL table changes — covers both realtime events and pullFromSupabase notifications
+    // Minor fallback listener in case a realtime event triggers a pull but React Query misses the granular update
+    const tableMap: Record<string, string> = {
+      users: 'users', clients: 'clients', transactions: 'transactions',
+      contracts: 'contracts', categories: 'categories',
+      bankAccounts: 'bank_accounts', cashMovements: 'cash_movements', auditLogs: 'audit_logs',
+    };
     const unsubscribe = onDataChange((changedTable) => {
-      if (changedTable === table || changedTable === 'companies' || !changedTable) {
-        setData(getData(key));
+      if (!changedTable || changedTable === tableMap[key as string] || changedTable === 'companies') {
+        refresh();
       }
     });
 
-    // Also poll once after a short delay to catch any pull that completed during mount
-    const timer = setTimeout(() => setData(getData(key)), 500);
+    return unsubscribe;
+  }, [key, refresh]);
 
-    return () => {
-      unsubscribe();
-      clearTimeout(timer);
-    };
-  }, [key]);
-
-  return [data, refresh];
+  return [data as AppData[K], refresh];
 }

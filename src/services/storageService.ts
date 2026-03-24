@@ -1,24 +1,29 @@
 import { AppData, Currency } from '@/types';
 import { generateMockData } from '@/utils/mockData';
 import { getSupabase } from '@/lib/supabase';
+import { queryClient } from '@/lib/queryClient';
 
-// ===== In-Memory Cache (replaces localStorage) =====
-
-let memoryCache: AppData | null = null;
+// ===== React Query Cache (replaces localStorage & memoryCache) =====
 
 function getDefaultData(): AppData {
   return generateMockData();
 }
 
 export function getAppData(): AppData {
-  if (!memoryCache) {
-    memoryCache = getDefaultData();
+  const cached = queryClient.getQueryData<AppData>(['appData']);
+  if (!cached) {
+    const defaultData = getDefaultData();
+    queryClient.setQueryData(['appData'], defaultData);
+    return defaultData;
   }
-  return memoryCache;
+  return cached;
 }
 
 function updateCache(data: AppData) {
-  memoryCache = data;
+  queryClient.setQueryData(['appData'], data);
+  (Object.keys(data) as Array<keyof AppData>).forEach((k) => {
+    queryClient.setQueryData(['appData', k], data[k]);
+  });
 }
 
 export function getData<K extends keyof AppData>(key: K): AppData[K] {
@@ -142,14 +147,6 @@ async function getCompanyContext(): Promise<{ companyId: string | null; companyN
   }
 
   if (!user) {
-    const savedCollab = sessionStorage.getItem('veltor_collaborator');
-    if (savedCollab) {
-      try {
-        const collab = JSON.parse(savedCollab);
-        cachedCompanyContext = { userId: null, companyId: collab.companyId, companyName: collab.companyName };
-        return { companyId: collab.companyId, companyName: collab.companyName };
-      } catch { /* ignore */ }
-    }
     return { companyId: null, companyName: null };
   }
 
@@ -176,7 +173,7 @@ async function getCompanyContext(): Promise<{ companyId: string | null; companyN
 
 export function clearCompanyCache() {
   cachedCompanyContext = null;
-  memoryCache = null;
+  queryClient.removeQueries({ queryKey: ['appData'] });
 }
 
 // ===== Realtime subscriptions =====

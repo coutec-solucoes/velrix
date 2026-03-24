@@ -12,8 +12,7 @@ import { Plus, Pencil, Trash2, X, Filter, ArrowUpRight, ArrowDownRight, Wallet, 
 import ReceiptPrint, { ReceiptData } from '@/components/ReceiptPrint';
 import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { exportFinanceCSV, exportInstallmentsPDF, exportFinancePDF } from '@/utils/exportUtils';
 import SaveButton from '@/components/SaveButton';
 import { useSyncToast } from '@/hooks/useSyncToast';
 import { convertAmount, conversionDescription, getExchangeRate } from '@/utils/currencyConversion';
@@ -35,14 +34,7 @@ const monthEnd = () => {
   d.setMonth(d.getMonth() + 1, 0);
   return d.toISOString().split('T')[0];
 };
-
-interface InstallmentPreview {
-  number: number;
-  amount: number;
-  dueDate: string;
-  dayAdjusted?: boolean;
-  originalDay?: number;
-}
+import { InstallmentPreview, generateInstallmentsPreview } from '@/utils/installmentUtils';
 
 export default function Financeiro() {
   const [transactions, refreshTransactions] = useRealtimeData('transactions');
@@ -323,47 +315,14 @@ export default function Financeiro() {
 
   // Generate installment previews
   const generateInstallments = () => {
-    if (!form.amount || installmentCount < 2) return;
-
-    let perInstallment: number;
-    let remainder = 0;
-
-    if (amountMode === 'total') {
-      // Valor total: dividir pelas parcelas
-      perInstallment = Math.floor((form.amount / installmentCount) * 100) / 100;
-      remainder = Math.round((form.amount - perInstallment * installmentCount) * 100) / 100;
-    } else {
-      // Valor da parcela: cada parcela tem o mesmo valor informado
-      perInstallment = form.amount;
-    }
-
-    const previews: InstallmentPreview[] = [];
-    const startDate = new Date(form.dueDate + 'T12:00:00');
-
-    for (let i = 0; i < installmentCount; i++) {
-      let dueDate: Date;
-      if (installmentFixedDay) {
-        const targetDay = startDate.getDate();
-        const baseMonth = startDate.getMonth() + i;
-        const targetYear = startDate.getFullYear() + Math.floor(baseMonth / 12);
-        const actualMonth = ((baseMonth % 12) + 12) % 12;
-        const maxDay = new Date(targetYear, actualMonth + 1, 0).getDate();
-        dueDate = new Date(targetYear, actualMonth, Math.min(targetDay, maxDay), 12, 0, 0);
-      } else {
-        dueDate = new Date(startDate);
-        dueDate.setDate(startDate.getDate() + i * installmentDaysInterval);
-      }
-      const dayWasAdjusted = installmentFixedDay && i > 0 && dueDate.getDate() !== startDate.getDate();
-      const [y, m, d] = [dueDate.getFullYear(), String(dueDate.getMonth() + 1).padStart(2, '0'), String(dueDate.getDate()).padStart(2, '0')];
-      
-      previews.push({
-        number: i + 1,
-        amount: (amountMode === 'total' && i === 0) ? perInstallment + remainder : perInstallment,
-        dueDate: `${y}-${m}-${d}`,
-        dayAdjusted: dayWasAdjusted,
-        originalDay: dayWasAdjusted ? startDate.getDate() : undefined,
-      });
-    }
+    const previews = generateInstallmentsPreview(
+      form.amount,
+      installmentCount,
+      amountMode,
+      form.dueDate,
+      installmentFixedDay,
+      installmentDaysInterval
+    );
     setInstallmentPreviews(previews);
   };
 
@@ -548,109 +507,15 @@ export default function Financeiro() {
   };
 
   const hasActiveFilters = Boolean(filterStatus || filterClient || filterCategory || dateFrom !== monthStart() || dateTo !== monthEnd());
-
   const currencyLabel: Record<string, string> = { BRL: '🇧🇷 BRL', PYG: '🇵🇾 PYG', USD: '🇺🇸 USD' };
-  const currencyLabelPdf: Record<string, string> = { BRL: '[BRL]', PYG: '[PYG]', USD: '[USD]' };
 
-  const exportCSV = (txList: Transaction[]) => {
-    const headers = [t('fin_description'), t('fin_type'), t('fin_category'), t('fin_client'), t('fin_currency'), t('fin_value'), t('fin_status'), t('fin_due_date')];
-    const rows = txList.map((tx) => [
-      tx.description, t(`fin_type_${tx.type}` as any), tx.category, clientName(tx.clientId),
-      currencyLabel[tx.currency] || tx.currency, formatCurrency(tx.amount, tx.currency), t(`fin_status_${tx.status}` as any), formatDate(tx.dueDate),
-    ]);
-    const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `financeiro_${new Date().toISOString().split('T')[0]}.csv`; a.click();
-    URL.revokeObjectURL(url);
-  };
-  const exportInstallmentsPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(14);
-    doc.text('Cronograma de Parcelas', 14, 18);
-    doc.setFontSize(10);
-    doc.text(`Descrição: ${form.description || '-'}`, 14, 26);
-    doc.text(`Moeda: ${form.currency}`, 14, 32);
-    doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 14, 38);
-
-    const total = installmentPreviews.reduce((s, p) => s + p.amount, 0);
-
-    autoTable(doc, {
-      startY: 44,
-      head: [['Parcela', 'Valor', 'Vencimento', 'Obs']],
-      body: installmentPreviews.map((inst) => [
-        `${inst.number}/${installmentCount}`,
-        formatCurrency(inst.amount, form.currency),
-        formatDate(inst.dueDate),
-        inst.dayAdjusted ? `Dia ajustado (original: ${inst.originalDay})` : '',
-      ]),
-      foot: [['Total', formatCurrency(total, form.currency), '', '']],
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [50, 50, 50] },
-      footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
-    });
-
-    doc.save(`parcelas_${form.description || 'cronograma'}_${new Date().toISOString().split('T')[0]}.pdf`);
+  const exportCSV = (txList: Transaction[]) => exportFinanceCSV(txList, t, clientName);
+  
+  const handleExportInstallmentsPDF = () => {
+    exportInstallmentsPDF(installmentPreviews, installmentCount, form);
   };
 
-  const exportPDF = (txList: Transaction[]) => {
-    const doc = new jsPDF({ orientation: 'landscape' });
-    doc.setFontSize(16); doc.text(t('fin_title'), 14, 18);
-    doc.setFontSize(9); doc.text(`${t('fin_filter_date_from')}: ${dateFrom}  ${t('fin_filter_date_to')}: ${dateTo}`, 14, 25);
-    const headers = [[t('fin_description'), t('fin_type'), t('fin_category'), t('fin_client'), t('fin_currency'), t('fin_value'), t('fin_status'), t('fin_due_date')]];
-    const rows = txList.map((tx) => [
-      tx.description, t(`fin_type_${tx.type}` as any), tx.category, clientName(tx.clientId),
-      currencyLabelPdf[tx.currency] || tx.currency, formatCurrency(tx.amount, tx.currency), t(`fin_status_${tx.status}` as any), formatDate(tx.dueDate),
-    ]);
-    autoTable(doc, { head: headers, body: rows, startY: 30, styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [30, 58, 95], textColor: 255 }, alternateRowStyles: { fillColor: [245, 247, 250] } });
-
-    // Totalizadores por moeda no rodapé
-    const totals: Record<string, { receita: number; despesa: number; investimento: number; retirada: number }> = {};
-    txList.forEach((tx) => {
-      if (!totals[tx.currency]) totals[tx.currency] = { receita: 0, despesa: 0, investimento: 0, retirada: 0 };
-      totals[tx.currency][tx.type] += tx.amount;
-    });
-
-    const finalY = (doc as any).lastAutoTable?.finalY ?? 40;
-    let footerY = finalY + 12;
-
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Totais por Moeda', 14, footerY);
-    footerY += 8;
-
-    const footerHeaders = [['Moeda', 'Receitas', 'Despesas', 'Investimentos', 'Retiradas', 'Saldo']];
-    const footerRows = Object.entries(totals).map(([currency, t]) => {
-      const saldo = t.receita - t.despesa - t.retirada;
-      return [
-        currencyLabelPdf[currency] || currency,
-        formatCurrency(t.receita, currency as any),
-        formatCurrency(t.despesa, currency as any),
-        formatCurrency(t.investimento, currency as any),
-        formatCurrency(t.retirada, currency as any),
-        formatCurrency(saldo, currency as any),
-      ];
-    });
-
-    autoTable(doc, {
-      head: footerHeaders,
-      body: footerRows,
-      startY: footerY,
-      styles: { fontSize: 9, cellPadding: 3, fontStyle: 'bold' },
-      headStyles: { fillColor: [40, 80, 120], textColor: 255 },
-      alternateRowStyles: { fillColor: [240, 245, 250] },
-      columnStyles: {
-        1: { halign: 'right' },
-        2: { halign: 'right' },
-        3: { halign: 'right' },
-        4: { halign: 'right' },
-        5: { halign: 'right' },
-      },
-    });
-
-    doc.save(`financeiro_${new Date().toISOString().split('T')[0]}.pdf`);
-  };
+  const exportPDF = (txList: Transaction[]) => exportFinancePDF(txList, dateFrom, dateTo, t, clientName);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
@@ -1336,7 +1201,7 @@ export default function Financeiro() {
                               </span>
                               <button
                                 type="button"
-                                onClick={exportInstallmentsPDF}
+                                onClick={handleExportInstallmentsPDF}
                                 className="flex items-center gap-1 text-[10px] text-secondary hover:text-secondary/80 font-medium"
                               >
                                 <Download className="w-3 h-3" /> PDF
