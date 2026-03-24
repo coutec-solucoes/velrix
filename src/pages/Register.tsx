@@ -7,7 +7,8 @@ import { applyDocumentMask, applyPhoneMask } from '@/utils/masks';
 import { fetchPlans } from '@/services/adminSupabaseService';
 import { SaasPlan } from '@/types/admin';
 import { useEffect } from 'react';
-import { initiatePayment, PaymentResponse } from '@/services/paymentService';
+import { PaymentResponse } from '@/services/paymentService';
+import { setupAccountFlow } from '@/services/registrationService';
 
 interface Props {
   onBackToLogin: () => void;
@@ -32,7 +33,6 @@ export default function Register({ onBackToLogin }: Props) {
   const [planId, setPlanId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'pagopar' | 'bancard'>('pix');
   const [paymentData, setPaymentData] = useState<PaymentResponse | null>(null);
-  const { register } = useAuth();
 
   useEffect(() => {
     fetchPlans().then(setPlans);
@@ -101,56 +101,33 @@ export default function Register({ onBackToLogin }: Props) {
     if (e) e.preventDefault();
     setError('');
 
-    // Final registration logic will be triggered after payment confirmation
     setLoading(true);
     try {
-      if (!paymentData) {
-        // First, initiate payment
-        const res = await initiatePayment({
-          amount: selectedPlan?.price || 0,
-          currency: selectedPlan?.currency || 'BRL',
-          description: `Assinatura Plano ${selectedPlan?.name}`,
-          customer: { name, email, document, phone }
-        }, country);
-
-        if (!res.success) {
-          setError(res.error || 'Erro ao processar pagamento.');
-          setLoading(false);
-          return;
-        }
-
-        if (res.paymentUrl) {
-          // Store intent and Redirect to Pagopar/Bancard
-          window.location.href = res.paymentUrl;
-          return;
-        }
-
-        setPaymentData(res);
-        setLoading(false);
-        return;
-      }
-
-      // If we are here, it's a PIX payment where the user already saw the QR code
-      // We proceed with the registration
-      const err = await register({
-        name,
-        email,
-        password,
-        country,
-        accountType,
-        companyName: accountType === 'empresa' ? companyName : undefined,
-        document,
-        phone,
-        planId: planId || undefined,
+      const result = await setupAccountFlow({
+        registrationData: {
+          name,
+          email,
+          password,
+          country,
+          accountType,
+          companyName: accountType === 'empresa' ? companyName : undefined,
+          document,
+          phone,
+          planId: planId || undefined,
+        },
+        paymentData,
+        selectedPlanPrice: selectedPlan?.price || 0,
+        selectedPlanCurrency: selectedPlan?.currency || 'BRL',
+        selectedPlanName: selectedPlan?.name || '',
       });
 
-      if (err === 'register_email_exists') {
-        setError('Este email já está cadastrado.');
-      } else if (err === 'supabase_not_configured') {
-        setError('Banco de dados não configurado. Configure o Supabase no painel admin.');
-      } else if (err) {
-        setError(err);
-      } else {
+      if (result.error) {
+        setError(result.error);
+      } else if (result.redirectUrl) {
+        window.location.href = result.redirectUrl;
+      } else if (result.paymentData) {
+        setPaymentData(result.paymentData);
+      } else if (result.success) {
         setSuccess(true);
       }
     } catch {

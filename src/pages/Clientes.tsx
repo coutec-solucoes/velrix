@@ -94,6 +94,8 @@ export default function Clientes() {
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [filterStatus, setFilterStatus] = useState<ClientStatus | ''>('');
   const [filterRole, setFilterRole] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
   const [activeTab, setActiveTab] = useState<'cadastro' | 'transacoes' | 'contratos'>('cadastro');
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -150,6 +152,17 @@ export default function Clientes() {
       return true;
     });
   }, [clients, searchQuery, filterCountry, filterStatus, filterRole, clientSummaries]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterCountry, filterStatus, filterRole]);
+
+  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
+  const paginatedClients = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredClients.slice(start, start + itemsPerPage);
+  }, [filteredClients, currentPage]);
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyClient }); setShowModal(true); };
   const openEdit = (c: Client) => { setEditing(c); setForm({ ...emptyClient, ...c }); setShowModal(true); };
@@ -366,7 +379,7 @@ export default function Clientes() {
 
       {/* Client Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredClients.map((c) => {
+        {paginatedClients.map((c) => {
           const summary = clientSummaries[c.id];
           return (
             <div key={c.id} className="bg-card rounded-lg p-5 card-shadow border border-border hover:card-shadow-hover transition-shadow">
@@ -432,6 +445,29 @@ export default function Clientes() {
           <p className="text-muted-foreground text-body-sm col-span-full text-center py-8">{t('cli_no_transactions')}</p>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-4">
+          <button 
+            disabled={currentPage === 1} 
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            className="px-3 py-1.5 rounded-lg border border-border text-body-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+          >
+            Anterior
+          </button>
+          <span className="text-body-sm text-muted-foreground">
+            Página {currentPage} de {totalPages}
+          </span>
+          <button 
+            disabled={currentPage === totalPages} 
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            className="px-3 py-1.5 rounded-lg border border-border text-body-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+          >
+            Próxima
+          </button>
+        </div>
+      )}
 
       {/* ======= CREATE/EDIT MODAL ======= */}
       {showModal && (

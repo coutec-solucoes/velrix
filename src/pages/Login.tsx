@@ -23,7 +23,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
-  const { login, loginAsCollaborator } = useAuth();
+  const { login, loginCollaborator } = useAuth();
   const { t } = useTranslation();
 
   const handleOwnerSubmit = async (e: React.FormEvent) => {
@@ -47,101 +47,9 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const supabase = getSupabase();
-      if (!supabase) { setError('Banco de dados não configurado.'); return; }
-
-      if (!companyCode.trim() || !username.trim() || !password) {
-        setError('Preencha todos os campos.');
-        return;
-      }
-
-      // Edge Function fallback architecture
-      const { data: result, error: fnError } = await supabase.functions.invoke('authenticate-collaborator', {
-        body: { companyCode: companyCode.trim(), username: username.trim(), password },
-      });
-
-      if (fnError || result?.error) {
-        console.error('[Collaborator Login] Edge/Result info:', fnError || result?.error);
-        
-        // RPC Fallback
-        const { data: rpcResult, error: rpcError } = await supabase.rpc('authenticate_collaborator', {
-          p_company_code: companyCode.trim(),
-          p_username: username.trim(),
-          p_password: password,
-        });
-        
-        if (rpcError || rpcResult?.error) {
-          setError(rpcResult?.error || 'Erro ao conectar ao servidor.');
-          return;
-        }
-
-        if (rpcResult?.success) {
-          const collab = rpcResult.collaborator;
-          const authEmail = (collab.email && collab.email.includes("@")) ? collab.email : `collab-${collab.id}@veltor.app`;
-          
-          // Tenta entrar com o Auth nativo
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: authEmail,
-            password: password
-          });
-
-          if (signInError) {
-            // Se falhou, tentamos registrar na hora
-            console.log('Auto-registrando colaborador no Auth...');
-            const { error: signUpError } = await supabase.auth.signUp({
-              email: authEmail,
-              password: password,
-              options: {
-                data: {
-                  is_collaborator: true,
-                  company_id: collab.companyId,
-                  company_name: collab.companyName,
-                  name: collab.name,
-                  role: collab.role,
-                  collaborator_id: collab.id
-                }
-              }
-            });
-
-            // Se o signUp funcionar e não pedir email de confirmação, vai ter sessão.
-            const { data: sessData } = await supabase.auth.getSession();
-            if (!signUpError && sessData?.session) {
-              return; // Router onAuthStateChange takes over
-            }
-          } else {
-            return; // SignIn successful
-          }
-
-          // Fallback legacy final (usará RLS anon, requer corrigir trigger no banco)
-          loginAsCollaborator({
-            id: collab.id, name: collab.name, email: collab.email || '',
-            role: collab.role, permissions: collab.permissions,
-            companyId: collab.companyId, companyName: collab.companyName,
-          });
-        }
-        return;
-      }
-
-      if (result.tokenHash) {
-        const { error: otpError } = await supabase.auth.verifyOtp({
-          token_hash: result.tokenHash, type: 'magiclink',
-        });
-        if (otpError) {
-          console.error('[Collaborator Login] verifyOtp error:', otpError);
-          const collab = result.collaborator;
-          // Se a OTP falhar, tenta fallback nativo
-          const authEmail = (collab.email && collab.email.includes("@")) ? collab.email : `collab-${collab.id}@veltor.app`;
-          await supabase.auth.signInWithPassword({ email: authEmail, password });
-          const { data: sess2 } = await supabase.auth.getSession();
-          if (sess2?.session) return;
-          
-          loginAsCollaborator({
-            id: collab.id, name: collab.name, email: collab.email || '',
-            role: collab.role, permissions: collab.permissions,
-            companyId: collab.companyId, companyName: collab.companyName,
-          });
-          return;
-        }
+      const loginError = await loginCollaborator(companyCode.trim(), username.trim(), password);
+      if (loginError) {
+        setError(loginError);
         return;
       }
     } catch {

@@ -777,3 +777,69 @@ export async function pushToSupabase(): Promise<boolean> {
     return false;
   }
 }
+
+export interface PaginatedResult<T> {
+  data: T[];
+  count: number;
+}
+
+export async function fetchClientsPaginated(page: number, limit: number, search?: string): Promise<PaginatedResult<any>> {
+  const supabase = getSupabase();
+  const companyId = await getCurrentCompanyId();
+  if (!supabase || !companyId) return { data: [], count: 0 };
+
+  let query = supabase.from('clients').select('*', { count: 'exact' }).eq('company_id', companyId);
+  
+  if (search) {
+    query = query.ilike('name', `%${search}%`);
+  }
+
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  const { data, count, error } = await query.range(from, to).order('name', { ascending: true });
+
+  if (error) {
+    console.error('[Supabase] fetchClientsPaginated error', error);
+    return { data: [], count: 0 };
+  }
+
+  return { data: (data || []).map((r: any) => toCamelCase(r)), count: count || 0 };
+}
+
+export async function fetchTransactionsPaginated(
+  page: number, 
+  limit: number, 
+  filters?: { status?: string; type?: string; month?: string; search?: string }
+): Promise<PaginatedResult<any>> {
+  const supabase = getSupabase();
+  const companyId = await getCurrentCompanyId();
+  if (!supabase || !companyId) return { data: [], count: 0 };
+
+  let query = supabase.from('transactions').select('*', { count: 'exact' }).eq('company_id', companyId);
+
+  if (filters?.status && filters.status !== 'todos') query = query.eq('status', filters.status);
+  if (filters?.type && filters.type !== 'todos') query = query.eq('type', filters.type);
+  if (filters?.search) query = query.ilike('description', `%${filters.search}%`);
+  
+  if (filters?.month) {
+    const [year, m] = filters.month.split('-');
+    const startDate = `${year}-${m}-01`;
+    const nextMonth = parseInt(m) === 12 ? '01' : String(parseInt(m) + 1).padStart(2, '0');
+    const nextYear = parseInt(m) === 12 ? parseInt(year) + 1 : year;
+    const endDate = `${nextYear}-${nextMonth}-01`;
+    query = query.gte('due_date', startDate).lt('due_date', endDate);
+  }
+
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  const { data, count, error } = await query.range(from, to).order('due_date', { ascending: false });
+
+  if (error) {
+    console.error('[Supabase] fetchTransactionsPaginated error', error);
+    return { data: [], count: 0 };
+  }
+
+  return { data: (data || []).map((r: any) => toCamelCase(r)), count: count || 0 };
+}

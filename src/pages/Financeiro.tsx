@@ -257,8 +257,9 @@ export default function Financeiro() {
   const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(monthEnd());
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterClient, setFilterClient] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
 
   const load = () => {
     refreshTransactions();
@@ -667,6 +668,11 @@ export default function Financeiro() {
     });
   }, [transactions, dateFrom, dateTo, filterStatus, filterClient, filterCategory]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateFrom, dateTo, filterStatus, filterClient, filterCategory, activeCurrencies]);
+
   const txByCurrency = useMemo(() => {
     const map: Record<string, Transaction[]> = {};
     activeCurrencies.forEach((c) => { map[c] = []; });
@@ -736,8 +742,11 @@ export default function Financeiro() {
   );
 
   const renderTableInner = (txList: Transaction[]) => {
-    const allSelected = txList.length > 0 && txList.every(tx => selectedIds.has(tx.id));
-    const someSelected = txList.some(tx => selectedIds.has(tx.id));
+    const totalPages = Math.ceil(txList.length / itemsPerPage);
+    const paginatedTxList = txList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    const allSelected = paginatedTxList.length > 0 && paginatedTxList.every(tx => selectedIds.has(tx.id));
+    const someSelected = paginatedTxList.some(tx => selectedIds.has(tx.id));
 
     return (
     <div className="bg-card rounded-lg card-shadow border border-border overflow-x-auto">
@@ -786,7 +795,7 @@ export default function Financeiro() {
             </tr>
           </thead>
           <tbody>
-            {txList.map((tx) => {
+            {paginatedTxList.map((tx) => {
               const isSelected = selectedIds.has(tx.id);
               return (
               <tr key={tx.id} className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${isSelected ? 'bg-secondary/5' : ''}`}>
@@ -840,6 +849,29 @@ export default function Financeiro() {
             })}
           </tbody>
         </table>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-4 pb-4 bg-card border-t border-border">
+          <button 
+            disabled={currentPage === 1} 
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            className="px-3 py-1.5 rounded-lg border border-border text-body-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+          >
+            Anterior
+          </button>
+          <span className="text-body-sm text-muted-foreground">
+            Página {currentPage} de {totalPages}
+          </span>
+          <button 
+            disabled={currentPage === totalPages} 
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            className="px-3 py-1.5 rounded-lg border border-border text-body-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+          >
+            Próxima
+          </button>
+        </div>
       )}
     </div>
     );

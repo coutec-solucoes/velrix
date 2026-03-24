@@ -22,18 +22,6 @@ export interface UserProfile {
   collaborator_id?: string;
 }
 
-interface RegisterData {
-  name: string;
-  email: string;
-  password: string;
-  country: 'BR' | 'PY';
-  accountType: 'empresa' | 'pessoal';
-  companyName?: string;
-  document: string;
-  phone: string;
-  planId?: string;
-}
-
 interface CollaboratorData {
   id: string;
   name: string;
@@ -49,8 +37,8 @@ interface AuthContextType {
   supabaseUser: SupabaseUser | null;
   session: Session | null;
   login: (email: string, password: string) => Promise<string | null>;
+  loginCollaborator: (companyCode: string, username: string, password: string) => Promise<string | null>;
   loginAsCollaborator: (data: CollaboratorData) => void;
-  register: (data: RegisterData) => Promise<string | null>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -297,61 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
-  const register = async (data: RegisterData): Promise<string | null> => {
-    const supabase = getSupabase();
-    if (!supabase) return 'supabase_not_configured';
-
-    const { data: authData, error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          name: data.name,
-          country: data.country,
-          account_type: data.accountType,
-          company_name: data.accountType === 'empresa' ? (data.companyName || '') : '',
-          document: data.document,
-          phone: data.phone,
-          plan_id: data.planId,
-        },
-      },
-    });
-
-    if (error) {
-      if (error.message.includes('already registered')) return 'register_email_exists';
-      return error.message;
-    }
-
-    // Update profile with additional data
-    if (authData.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          name: data.name,
-          country: data.country,
-          account_type: data.accountType,
-          company_name: data.accountType === 'empresa' ? data.companyName : null,
-          document: data.document,
-          phone: data.phone,
-          role: 'proprietario',
-          plan_id: data.planId || null,
-        })
-        .eq('id', authData.user.id);
-
-      if (profileError) {
-        console.error('Error updating profile:', profileError);
-      }
-
-      const p = await fetchProfile(authData.user.id);
-      setProfile(p);
-    }
-
-    return null;
-  };
-
-  const loginAsCollaborator = (data: CollaboratorData) => {
-    const collaboratorProfile: UserProfile = {
+  const loginAsCollaborator = (data: CollaboratorData) => {    const collaboratorProfile: UserProfile = {
       id: data.id,
       name: data.name,
       email: data.email,
@@ -366,6 +300,101 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(collaboratorProfile);
     // Store in sessionStorage for page refreshes
     sessionStorage.setItem('veltor_collaborator', JSON.stringify(data));
+  };
+
+  const loginCollaborator = async (companyCode: string, username: string, password: string): Promise<string | null> => {
+    const supabase = getSupabase();
+    if (!supabase) return 'Banco de dados não configurado.';
+
+    // Edge Function fallback architecture
+    const { data: result, error: fnError } = await supabase.functions.invoke('authenticate-collaborator', {
+      body: { companyCode, username, password },
+    });
+
+    if (fnError || result?.error) {
+      console.error('[Collaborator Login] Edge/Result info:', fnError || result?.error);
+      
+      // RPC Fallback
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('authenticate_collaborator', {
+        p_company_code: companyCode,
+        p_username: username,
+        p_password: password,
+      });
+      
+      if (rpcError || rpcResult?.error) {
+        return rpcResult?.error || 'Erro ao conectar ao servidor.';
+      }
+
+      if (rpcResult?.success) {
+        const collab = rpcResult.collaborator;
+        const authEmail = (collab.email && collab.email.includes("@")) ? collab.email : `collab-${collab.id}@veltor.app`;
+        
+        // Tenta entrar com o Auth nativo
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: password
+        });
+
+        if (signInError) {
+          // Se falhou, tentamos registrar na hora
+          console.log('Auto-registrando colaborador no Auth...');
+          const { error: signUpError } = await supabase.auth.signUp({
+            email: authEmail,
+            password: password,
+            options: {
+              data: {
+                is_collaborator: true,
+                company_id: collab.companyId,
+                company_name: collab.companyName,
+                name: collab.name,
+                role: collab.role,
+                collaborator_id: collab.id
+              }
+            }
+          });
+
+          const { data: sessData } = await supabase.auth.getSession();
+          if (!signUpError && sessData?.session) {
+            return null; // Router onAuthStateChange takes over
+          }
+        } else {
+          return null; // SignIn successful
+        }
+
+        // Fallback legacy final
+        loginAsCollaborator({
+          id: collab.id, name: collab.name, email: collab.email || '',
+          role: collab.role, permissions: collab.permissions,
+          companyId: collab.companyId, companyName: collab.companyName,
+        });
+      }
+      return null;
+    }
+
+    if (result.tokenHash) {
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        token_hash: result.tokenHash, type: 'magiclink',
+      });
+      if (otpError) {
+        console.error('[Collaborator Login] verifyOtp error:', otpError);
+        const collab = result.collaborator;
+        // Se a OTP falhar, tenta fallback nativo
+        const authEmail = (collab.email && collab.email.includes("@")) ? collab.email : `collab-${collab.id}@veltor.app`;
+        await supabase.auth.signInWithPassword({ email: authEmail, password });
+        const { data: sess2 } = await supabase.auth.getSession();
+        if (sess2?.session) return null;
+        
+        loginAsCollaborator({
+          id: collab.id, name: collab.name, email: collab.email || '',
+          role: collab.role, permissions: collab.permissions,
+          companyId: collab.companyId, companyName: collab.companyName,
+        });
+        return null;
+      }
+      return null;
+    }
+    
+    return 'Erro inesperado ao tentar autenticar.';
   };
 
   const logout = async () => {
@@ -393,8 +422,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabaseUser,
         session,
         login,
+        loginCollaborator,
         loginAsCollaborator,
-        register,
         logout,
         isAuthenticated: (!!session && !!profile) || (!!profile && isCollaboratorSession),
         isLoading,

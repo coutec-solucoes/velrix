@@ -42,6 +42,8 @@ export default function Caixa() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [clientSearch, setClientSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
   const [filterBankAccount, setFilterBankAccount] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterPendingCurrency, setFilterPendingCurrency] = useState('');
@@ -73,6 +75,17 @@ export default function Caixa() {
       .filter(m => !filterType || m.type === filterType)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [movements, dateFrom, dateTo, filterBankAccount, filterType]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateFrom, dateTo, filterBankAccount, filterType, activeTab]);
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginatedMovements = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filtered.slice(start, start + itemsPerPage);
+  }, [filtered, currentPage]);
 
   // Unified summary: derive from VISIBLE cash movements
   const summary = useMemo(() => {
@@ -457,7 +470,7 @@ export default function Caixa() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(m => (
+                  {paginatedMovements.map(m => (
                     <tr key={m.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                       <td className="p-3 text-muted-foreground">{formatDate(m.date)}</td>
                       <td className="p-3 font-medium">{m.description}</td>
@@ -500,6 +513,29 @@ export default function Caixa() {
               </table>
             )}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button 
+                disabled={currentPage === 1} 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="px-3 py-1.5 rounded-lg border border-border text-body-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+              >
+                Anterior
+              </button>
+              <span className="text-body-sm text-muted-foreground">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button 
+                disabled={currentPage === totalPages} 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="px-3 py-1.5 rounded-lg border border-border text-body-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+              >
+                Próxima
+              </button>
+            </div>
+          )}
         </>
       )}
 
