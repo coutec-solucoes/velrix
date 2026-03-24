@@ -26,24 +26,8 @@ function SqlBlockItem({ table, index, externalStatus, manualOnly = false }: { ta
   };
 
   const executeSQL = async () => {
-    if (manualOnly) {
-      setLocalStatus('success');
-      setLocalMessage('Este bloco deve ser executado no SQL Editor do Supabase (não via exec_sql).');
-      return;
-    }
-
-    const client = getSupabase();
-    if (!client) { setLocalStatus('error'); setLocalMessage('Supabase não configurado.'); return; }
-    setLocalStatus('running');
-    setLocalMessage('');
-    try {
-      const { error } = await client.rpc('exec_sql', { sql_query: makeIdempotent(table.sql) });
-      if (error) { setLocalStatus('error'); setLocalMessage(error.message); }
-      else { setLocalStatus('success'); setLocalMessage('Executado com sucesso!'); }
-    } catch {
-      setLocalStatus('error');
-      setLocalMessage('Falha na execução. Cole o SQL manualmente no SQL Editor do Supabase.');
-    }
+    setLocalStatus('error');
+    setLocalMessage('Execução direta via UI desabilitada por segurança (Padrão Enterprise). Copie e execute no SQL Editor do Supabase.');
   };
 
   return (
@@ -69,9 +53,9 @@ function SqlBlockItem({ table, index, externalStatus, manualOnly = false }: { ta
           </button>
           <button onClick={executeSQL} disabled={status === 'running' || manualOnly}
             className="flex items-center gap-1 px-2.5 py-1 rounded bg-secondary/20 text-secondary text-xs font-medium hover:bg-secondary/30 transition-colors disabled:opacity-50"
-            title={manualOnly ? 'Execute no SQL Editor do Supabase' : 'Executar no Supabase'}>
-            {status === 'running' ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-            {manualOnly ? 'SQL Editor' : status === 'running' ? 'Executando...' : copied ? 'Copiado!' : 'Executar'}
+            title="Execute no SQL Editor do Supabase">
+            <Play size={12} />
+            SQL Editor
           </button>
         </div>
       </div>

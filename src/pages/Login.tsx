@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from '@/hooks/useI18n';
 import { Eye, EyeOff, LogIn, Loader2, Building2, User } from 'lucide-react';
@@ -25,6 +25,13 @@ export default function Login() {
   const [showForgot, setShowForgot] = useState(false);
   const { login, loginCollaborator } = useAuth();
   const { t } = useTranslation();
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === '/register' || path === '/checkout') {
+      setShowRegister(true);
+    }
+  }, []);
 
   const handleOwnerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

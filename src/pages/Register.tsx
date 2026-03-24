@@ -35,7 +35,26 @@ export default function Register({ onBackToLogin }: Props) {
   const [paymentData, setPaymentData] = useState<PaymentResponse | null>(null);
 
   useEffect(() => {
-    fetchPlans().then(setPlans);
+    fetchPlans().then((fetchedPlans) => {
+      setPlans(fetchedPlans);
+      
+      // Parse external URL parameters for marketing/sales page integration
+      const params = new URLSearchParams(window.location.search);
+      const urlCountry = params.get('country');
+      if (urlCountry === 'BR' || urlCountry === 'PY') {
+        setCountry(urlCountry);
+      }
+      
+      const urlType = params.get('type');
+      if (urlType === 'empresa' || urlType === 'pessoal') {
+        setAccountType(urlType);
+      }
+      
+      const urlPlanId = params.get('planId');
+      if (urlPlanId && fetchedPlans.some(p => p.id === urlPlanId)) {
+        setPlanId(urlPlanId);
+      }
+    });
   }, []);
 
   useEffect(() => {
