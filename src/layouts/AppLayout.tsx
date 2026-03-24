@@ -129,9 +129,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
               {companyBranding.logo ? (
-                <img src={companyBranding.logo} alt={companyBranding.name} className="w-8 h-8 object-contain" />
+                <img src={companyBranding.logo} alt={companyBranding.name} className="w-9 h-9 object-contain" />
               ) : (
-                <img src={veltorIcon} alt="VELRIX" className="w-8 h-8 object-contain" />
+                <img src={veltorIcon} alt="VELRIX" className="w-9 h-9 object-contain" />
               )}
             </div>
             <span

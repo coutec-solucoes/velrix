@@ -48,7 +48,7 @@ export default function AdminLogin() {
     <div className="min-h-screen min-h-[100dvh] flex items-center justify-center px-4 relative" style={{ backgroundColor: '#0a1628' }}>
       <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20" style={{ backgroundImage: `url(${veltorBg})` }} />
       <div className="w-full max-w-sm flex flex-col items-center relative z-10">
-        <img src={veltorLogo} alt="Velrix" className="w-3/4 max-w-[200px] h-auto drop-shadow-lg mb-4" />
+        <img src={veltorLogo} alt="Velrix" className="w-3/4 max-w-[220px] h-auto drop-shadow-lg mb-4" />
         <div className="flex items-center gap-2 mb-5">
           <Shield size={16} className="text-secondary" />
           <p className="text-white/70 text-xs tracking-wide uppercase">Painel Administrativo</p>

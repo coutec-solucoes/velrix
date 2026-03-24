@@ -175,7 +175,7 @@ export default function Login() {
         <img
           src={veltorLogo}
           alt="Velrix"
-          className="w-full max-w-sm h-auto drop-shadow-lg mb-4 sm:mb-6"
+          className="w-full max-w-[420px] h-auto drop-shadow-lg mb-4 sm:mb-6"
         />
 
         <p className="text-white/70 text-xs sm:text-sm tracking-wide mb-5">
