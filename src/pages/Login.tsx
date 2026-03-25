@@ -29,7 +29,7 @@ export default function Login() {
   useEffect(() => {
     const path = window.location.pathname;
     if (path === '/register' || path === '/checkout') {
-      setShowRegister(true);
+      window.location.href = 'https://velrixcontrolfinace.vercel.app/';
     }
   }, []);
 
@@ -184,12 +184,12 @@ export default function Login() {
         )}
 
         {tab === 'owner' && (
-          <button
-            onClick={() => setShowRegister(true)}
-            className="mt-4 text-sm text-white/60 hover:text-white transition-colors"
+          <a
+            href="https://velrixcontrolfinace.vercel.app/"
+            className="mt-4 text-sm text-white/60 hover:text-white transition-colors text-center block"
           >
             Não tem conta? <span className="text-secondary font-medium">Criar conta</span>
-          </button>
+          </a>
         )}
       </div>
     </div>

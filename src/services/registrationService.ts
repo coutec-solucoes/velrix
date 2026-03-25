@@ -16,7 +16,7 @@ export interface RegisterData {
 /**
  * Creates a new user account in Supabase Auth and updates the profiles table.
  */
-export async function registerAccount(data: RegisterData): Promise<string | null> {
+export async function registerAccount(data: RegisterData, isTrial: boolean = false): Promise<string | null> {
   const supabase = getSupabase();
   if (!supabase) return 'supabase_not_configured';
 
@@ -63,6 +63,16 @@ export async function registerAccount(data: RegisterData): Promise<string | null
     if (profileError) {
       console.error('Error updating profile:', profileError);
     }
+
+    if (isTrial) {
+      // Need to wait slightly for triggers to run and create the company
+      setTimeout(async () => {
+        const { error: rpcError } = await supabase.rpc('start_free_trial', { p_user_id: authData.user.id, p_days: 7 });
+        if (rpcError) {
+          console.error('Failed to start free trial:', rpcError);
+        }
+      }, 2000);
+    }
   }
 
   return null;
@@ -74,6 +84,7 @@ export interface SetupAccountFlowParams {
   selectedPlanPrice: number;
   selectedPlanCurrency: string;
   selectedPlanName: string;
+  isTrial?: boolean;
 }
 
 export interface SetupAccountFlowResult {
@@ -92,10 +103,11 @@ export async function setupAccountFlow({
   paymentData,
   selectedPlanPrice,
   selectedPlanCurrency,
-  selectedPlanName
+  selectedPlanName,
+  isTrial
 }: SetupAccountFlowParams): Promise<SetupAccountFlowResult> {
   
-  if (!paymentData) {
+  if (!paymentData && !isTrial) {
     // Phase 1: Initiate payment
     const paymentPayload: PaymentInitiation = {
       amount: selectedPlanPrice,
@@ -124,8 +136,8 @@ export async function setupAccountFlow({
     return { paymentData: res };
   }
 
-  // Phase 2: Complete Registration (e.g. after PIX generation)
-  const err = await registerAccount(registrationData);
+  // Phase 2: Complete Registration (e.g. after PIX generation or IF isTrial)
+  const err = await registerAccount(registrationData, isTrial);
   
   if (err === 'register_email_exists') {
     return { error: 'Este email já está cadastrado.' };

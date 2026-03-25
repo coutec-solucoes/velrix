@@ -33,6 +33,7 @@ export default function Register({ onBackToLogin }: Props) {
   const [planId, setPlanId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'pagopar' | 'bancard'>('pix');
   const [paymentData, setPaymentData] = useState<PaymentResponse | null>(null);
+  const [isTrial, setIsTrial] = useState(false);
 
   useEffect(() => {
     fetchPlans().then((fetchedPlans) => {
@@ -53,6 +54,11 @@ export default function Register({ onBackToLogin }: Props) {
       const urlPlanId = params.get('planId');
       if (urlPlanId && fetchedPlans.some(p => p.id === urlPlanId)) {
         setPlanId(urlPlanId);
+      }
+      
+      const urlTrial = params.get('trial');
+      if (urlTrial === 'true') {
+        setIsTrial(true);
       }
     });
   }, []);
@@ -138,6 +144,7 @@ export default function Register({ onBackToLogin }: Props) {
         selectedPlanPrice: selectedPlan?.price || 0,
         selectedPlanCurrency: selectedPlan?.currency || 'BRL',
         selectedPlanName: selectedPlan?.name || '',
+        isTrial,
       });
 
       if (result.error) {
@@ -332,33 +339,46 @@ export default function Register({ onBackToLogin }: Props) {
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-white/80 text-sm font-medium">Forma de Pagamento</p>
-                    {country === 'BR' ? (
-                      <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                          <CreditCard size={20} className="text-emerald-400" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-white text-sm font-medium">PIX (Brasil)</p>
-                          <p className="text-white/40 text-[10px]">Ativação imediata após confirmação</p>
+                    {isTrial ? (
+                      <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-3">
+                        <div className="flex-1 text-center">
+                          <p className="text-white text-sm font-medium">Teste Grátis de 7 Dias</p>
+                          <p className="text-white/60 text-xs mt-1">Inicie gora e aproveite todas as funcionalidades do plano sem compromisso inicial.</p>
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => setPaymentMethod('pagopar')}
-                          className={`py-2.5 rounded-lg text-xs font-medium border transition-colors ${paymentMethod === 'pagopar' ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/15'}`}>
-                          Pagopar
-                        </button>
-                        <button type="button" onClick={() => setPaymentMethod('bancard')}
-                          className={`py-2.5 rounded-lg text-xs font-medium border transition-colors ${paymentMethod === 'bancard' ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/15'}`}>
-                          Bancard
-                        </button>
-                      </div>
+                      <>
+                        <p className="text-white/80 text-sm font-medium">Forma de Pagamento</p>
+                        {country === 'BR' ? (
+                          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                              <CreditCard size={20} className="text-emerald-400" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-white text-sm font-medium">PIX (Brasil)</p>
+                              <p className="text-white/40 text-[10px]">Ativação imediata após confirmação</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            <button type="button" onClick={() => setPaymentMethod('pagopar')}
+                              className={`py-2.5 rounded-lg text-xs font-medium border transition-colors ${paymentMethod === 'pagopar' ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/15'}`}>
+                              Pagopar
+                            </button>
+                            <button type="button" onClick={() => setPaymentMethod('bancard')}
+                              className={`py-2.5 rounded-lg text-xs font-medium border transition-colors ${paymentMethod === 'bancard' ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/15'}`}>
+                              Bancard
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 
                   <p className="text-white/40 text-[10px] text-center leading-relaxed italic">
-                    {country === 'BR' ? 'Ao clicar em "Gerar QR Code PIX", um código será gerado para pagamento.' : 'Ao clicar em "Ir para Pagamento", você será redirecionado para o ambiente seguro.'}
+                    {isTrial 
+                      ? 'Ao clicar em "Iniciar teste grátis", sua conta será ativada instantaneamente.' 
+                      : (country === 'BR' ? 'Ao clicar em "Gerar QR Code PIX", um código será gerado para pagamento.' : 'Ao clicar em "Ir para Pagamento", você será redirecionado para o ambiente seguro.')}
                   </p>
                 </>
               ) : (
@@ -401,7 +421,9 @@ export default function Register({ onBackToLogin }: Props) {
                 )}
                 {loading ? 'Processando...' : (
                   paymentData ? 'Confirmar Pagamento e Finalizar' :
-                  (step === 3 ? (country === 'BR' ? 'Gerar QR Code PIX' : 'Ir para Pagamento') : 'Próximo')
+                  (step === 3 
+                    ? (isTrial ? 'Iniciar teste grátis' : (country === 'BR' ? 'Gerar QR Code PIX' : 'Ir para Pagamento')) 
+                    : 'Próximo')
                 )}
               </button>
             </div>
