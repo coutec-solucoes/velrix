@@ -205,6 +205,7 @@ export default function AdminSettingsPage() {
     bank_accounts: 'bank_accounts',
     cash_movements: 'cash_movements',
     audit_logs: 'audit_logs',
+    cobradores: 'cobradores',
   };
 
   const checkTables = async () => {

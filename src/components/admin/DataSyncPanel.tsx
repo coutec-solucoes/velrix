@@ -17,6 +17,7 @@ const allDiagTables = [
   { table: 'companies', label: 'Empresas' },
   { table: 'users_secure', label: 'Usuários (App)' },
   { table: 'clients', label: 'Clientes' },
+  { table: 'cobradores', label: 'Cobradores' },
   { table: 'transactions', label: 'Movimentações' },
   { table: 'contracts', label: 'Contratos' },
   { table: 'categories', label: 'Categorias' },
