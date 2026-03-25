@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { getAppData, updateSettings, addExchangeRateSnapshot, getExchangeRateHistory } from '@/services/storageService';
 import { AppSettings, Currency, Country, AppLanguage, ExchangeRateSnapshot, LateFeeSettings } from '@/types';
 import { useTranslation } from '@/hooks/useI18n';
-import { Save, Building2, Coins, Globe, CheckCircle2, ArrowRightLeft, ToggleLeft, ToggleRight, History, UserCog, Percent, Upload, Route, X as XIcon } from 'lucide-react';
+import { Save, Building2, Coins, Globe, CheckCircle2, ArrowRightLeft, ToggleLeft, ToggleRight, History, UserCog, Percent, Upload, Route, X as XIcon, BookOpen } from 'lucide-react';
 import SaveButton from '@/components/SaveButton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import Usuarios from '@/pages/Usuarios';
+import ManualTreinamento from '@/components/ManualTreinamento';
 
 const allCurrencies: { code: Currency; label: string; symbol: string }[] = [
   { code: 'BRL', label: 'Real', symbol: 'R$' },
@@ -199,6 +200,7 @@ export default function Configuracoes() {
         <TabsList className="bg-muted mb-6">
           <TabsTrigger value="geral" className="gap-1.5"><Building2 size={14} />{t('cfg_company_data')}</TabsTrigger>
           <TabsTrigger value="usuarios" className="gap-1.5"><UserCog size={14} />{t('usr_tab')}</TabsTrigger>
+          <TabsTrigger value="manual" className="gap-1.5"><BookOpen size={14} />📚 Manual do Sistema</TabsTrigger>
         </TabsList>
 
         <TabsContent value="geral" className="space-y-6 max-w-3xl">
@@ -629,6 +631,10 @@ export default function Configuracoes() {
 
         <TabsContent value="usuarios">
           <Usuarios />
+        </TabsContent>
+
+        <TabsContent value="manual" className="w-full">
+          <ManualTreinamento />
         </TabsContent>
       </Tabs>
     </div>
