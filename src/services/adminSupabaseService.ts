@@ -136,19 +136,40 @@ export async function updateCompanyExpirySupa(id: string, planExpiry: string) {
 }
 
 export async function deleteCompanySupa(id: string) {
-  // 1. Delete operational company (cascades to clients, users, transactions, etc.)
-  const { error: opError } = await supabase.from('companies').delete().eq('id', id);
-  if (opError) console.error('delete operational company error:', opError);
+  try {
+    // 1. Clear profiles company_id first (this is the most common FK blocker)
+    const { error: profError } = await supabase.from('profiles').update({ company_id: null }).eq('company_id', id);
+    if (profError) console.error('clear profiles company error:', profError);
 
-  // 2. Clear profiles company_id so users aren't orphaned with a dead link
-  const { error: profError } = await supabase.from('profiles').update({ company_id: null }).eq('company_id', id);
-  if (profError) console.error('clear profiles company error:', profError);
+    // 2. Delete all operational data scoped by company_id
+    // List of tables from storageService.COMPANY_SCOPED_TABLES
+    const tables = [
+      'clients', 'transactions', 'contracts', 'categories', 
+      'bank_accounts', 'cash_movements', 'audit_logs', 'cobradores', 'app_settings'
+    ];
 
-  // 3. Delete SaaS billing company (cascades to saas_payments)
-  const { error: saasError } = await supabase.from('saas_companies').delete().eq('id', id);
-  if (saasError) console.error('delete saas company error:', saasError);
+    for (const table of tables) {
+      const { error } = await supabase.from(table).delete().eq('company_id', id);
+      if (error) console.warn(`Delete from ${table} error:`, error);
+    }
 
-  if (!opError && !saasError) await logActivity('Empresa excluída permanentemente', id);
+    // 3. Delete SaaS billing company (cascades to saas_payments)
+    const { error: saasError } = await supabase.from('saas_companies').delete().eq('id', id);
+    if (saasError) console.error('delete saas company error:', saasError);
+
+    // 4. Finally delete operational company record
+    const { error: opError } = await supabase.from('companies').delete().eq('id', id);
+    if (opError) console.error('delete operational company error:', opError);
+
+    if (!opError && !saasError) {
+      await logActivity('Empresa excluída permanentemente', id);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('deleteCompanySupa unexpected error:', err);
+    return false;
+  }
 }
 
 // ===== Payments =====
