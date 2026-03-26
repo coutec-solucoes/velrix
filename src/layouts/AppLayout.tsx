@@ -96,7 +96,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, [appData.settings?.company]);
 
   // Determine if cobradores feature is enabled reactively
-  const cobradoresEnabled = appData.settings?.cobradoresEnabled ?? false;
+  const canUseCobradores = useMemo(() => {
+    const features = (appData.settings?.company?.planFeatures || '').toLowerCase();
+    return features.includes('cobrador') || features.includes('completo') || features.includes('pro') || features.includes('ilimitado');
+  }, [appData.settings?.company?.planFeatures]);
+
+  const cobradoresEnabled = (appData.settings?.cobradoresEnabled ?? false) && canUseCobradores;
 
   const visibleMenuItems = useMemo(() => {
     return menuItems.filter(item => {

@@ -135,12 +135,27 @@ export default function Configuracoes() {
     features.includes('pro') ||
     features.includes('ilimitado');
 
+  const canUseCobradores = 
+    features.includes('cobrador') || 
+    features.includes('completo') || 
+    features.includes('pro') ||
+    features.includes('ilimitado');
+
   const toggleMultiCurrency = () => {
     if (!canUseMultiCurrency && !company.multiCurrency) {
       alert('Seu plano atual não permite habilitar múltiplas moedas. Migrar para o Plano Completo no painel Admin.');
       return;
     }
     updateCompany({ multiCurrency: !company.multiCurrency });
+  };
+
+  const toggleCobradores = () => {
+    if (!canUseCobradores && !settings.cobradoresEnabled) {
+      alert('Seu plano atual não permite habilitar o Módulo de Cobradores. Verifique seu contrato ou migre de plano no painel Admin.');
+      return;
+    }
+    setSettings({ ...settings, cobradoresEnabled: !settings.cobradoresEnabled });
+    setSaved(false);
   };
 
   const handlePriorityChange = (index: number, code: Currency) => {
@@ -578,10 +593,7 @@ export default function Configuracoes() {
             </div>
           </div>
           <button
-            onClick={() => {
-              setSettings({ ...settings, cobradoresEnabled: !settings.cobradoresEnabled });
-              setSaved(false);
-            }}
+            onClick={toggleCobradores}
             className="flex items-center gap-2 transition-colors"
           >
             {settings.cobradoresEnabled ? <ToggleRight size={36} className="text-secondary" /> : <ToggleLeft size={36} className="text-muted-foreground" />}
