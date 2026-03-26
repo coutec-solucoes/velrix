@@ -1,9 +1,11 @@
+// @ts-nocheck
 // Supabase Edge Function: mp-subscribe
 // Handles Mercado Pago card payment processing
-// Deploy: supabase functions deploy mp-subscribe
+// Deploy: supabase functions deploy mp-subscribe --no-verify-jwt --project-ref iapvzhetbytxafseyffx
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,12 +29,29 @@ serve(async (req: Request) => {
       );
     }
 
-    // Get MP Access Token from environment variable (set in Supabase Dashboard)
-    // Dashboard → Edge Functions → mp-subscribe → Secrets → MP_ACCESS_TOKEN
-    const mpAccessToken = Deno.env.get('MP_ACCESS_TOKEN');
+    // ── Pre-initialize Supabase ─────────────────────────────────────────────
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // ── Get MP Access Token from Database (Admin Settings) ───────────────────
+    // This allows managing the secret via the Admin UI
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'mpSecretKey')
+      .single();
+
+    let mpAccessToken = Deno.env.get('MP_ACCESS_TOKEN'); // Fallback to env var
+    
+    if (settingsData?.value) {
+      mpAccessToken = settingsData.value;
+    }
+
     if (!mpAccessToken) {
       return new Response(
-        JSON.stringify({ error: 'MP_ACCESS_TOKEN não configurado nas variáveis de ambiente da Edge Function.' }),
+        JSON.stringify({ error: 'Mercado Pago Secret Key (Access Token) não configurado no Admin -> APIs.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -73,10 +92,7 @@ serve(async (req: Request) => {
     }
 
     // ── 2. Update company status in Supabase ──────────────────────────────────
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // (supabase client is already initialized at the top)
 
     // Set plan expiry to 30 days from now
     const expiry = new Date();
