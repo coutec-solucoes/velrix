@@ -67,11 +67,28 @@ export default function MeuPlano() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('company_id, country, name, phone, document')
+        .select('company_id, country')
         .eq('id', user.id)
         .single();
 
       if (!profile?.company_id) { setLoading(false); return; }
+
+      // Try to fetch extra profile fields (optional — may not exist in all DB schemas)
+      let userName = user.email?.split('@')[0] || '';
+      let userDocument = '';
+      let userPhone = '';
+      try {
+        const { data: fullProfile } = await supabase
+          .from('profiles')
+          .select('name, phone, document')
+          .eq('id', user.id)
+          .single();
+        if (fullProfile) {
+          userName = fullProfile.name || userName;
+          userDocument = fullProfile.document || '';
+          userPhone = fullProfile.phone || '';
+        }
+      } catch { /* ignore — columns may not exist */ }
 
       const { data: company } = await supabase
         .from('saas_companies')
@@ -123,9 +140,9 @@ export default function MeuPlano() {
         companyId: profile.company_id,
         country,
         userEmail: user.email || '',
-        userName: profile.name || '',
-        userDocument: profile.document || '',
-        userPhone: profile.phone || '',
+        userName: userName,
+        userDocument: userDocument,
+        userPhone: userPhone,
       });
       setLoading(false);
     };

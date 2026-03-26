@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getAppData, updateSettings, addExchangeRateSnapshot, getExchangeRateHistory } from '@/services/storageService';
 import { AppSettings, Currency, Country, AppLanguage, ExchangeRateSnapshot, LateFeeSettings } from '@/types';
 import { useTranslation } from '@/hooks/useI18n';
@@ -39,6 +40,8 @@ const languages: { code: AppLanguage; label: string }[] = [
 ];
 
 export default function Configuracoes() {
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get('tab') || 'geral';
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [history, setHistory] = useState<ExchangeRateSnapshot[]>([]);
@@ -197,7 +200,7 @@ export default function Configuracoes() {
     <div className="space-y-6 max-w-4xl">
       <h1 className="text-title-lg">{t('cfg_title')}</h1>
 
-      <Tabs defaultValue="geral" className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList className="bg-muted mb-6">
           <TabsTrigger value="geral" className="gap-1.5"><Building2 size={14} />{t('cfg_company_data')}</TabsTrigger>
           <TabsTrigger value="usuarios" className="gap-1.5"><UserCog size={14} />{t('usr_tab')}</TabsTrigger>

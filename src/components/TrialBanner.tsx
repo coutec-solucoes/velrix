@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Clock, CreditCard, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Clock, CreditCard, AlertTriangle } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 interface TrialInfo {
   isTrial: boolean;
@@ -13,6 +14,7 @@ interface TrialInfo {
 export default function TrialBanner() {
   const [info, setInfo] = useState<TrialInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -107,8 +109,7 @@ export default function TrialBanner() {
   };
 
   const goToSettings = () => {
-    // Navigate to configuracoes tab "meu-plano"
-    window.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'configuracoes', tab: 'meu-plano' } }));
+    navigate('/configuracoes?tab=meu-plano');
   };
 
   return (
