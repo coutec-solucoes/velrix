@@ -241,7 +241,10 @@ BEGIN
       currency_priority,
       active_currencies,
       exchange_rates,
-      plan_id
+      plan_id,
+      document,
+      phone,
+      email
     )
     VALUES (
       new_company_id,
@@ -251,8 +254,12 @@ BEGIN
       true,
       '["BRL","PYG","USD"]'::jsonb,
       '["BRL","PYG","USD"]'::jsonb,
+      '["BRL","PYG","USD"]'::jsonb,
       '[]'::jsonb,
-      NULLIF(NEW.raw_user_meta_data->>'plan_id', '')
+      NULLIF(NEW.raw_user_meta_data->>'plan_id', ''),
+      COALESCE(NEW.raw_user_meta_data->>'document', ''),
+      COALESCE(NEW.raw_user_meta_data->>'phone', ''),
+      COALESCE(NEW.email, '')
     )
     ON CONFLICT (id) DO NOTHING;
 
@@ -285,6 +292,10 @@ CREATE TRIGGER on_auth_user_created
   currency_priority JSONB DEFAULT '["BRL"]'::jsonb,
   active_currencies JSONB DEFAULT '["BRL"]'::jsonb,
   exchange_rates JSONB DEFAULT '[]'::jsonb,
+  document TEXT,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

@@ -114,7 +114,13 @@ export default function Configuracoes() {
     setLanguage(lang);
   };
 
-  const canUseMultiCurrency = company.planFeatures?.toLowerCase().includes('multi-moeda') || company.planFeatures?.toLowerCase().includes('completo');
+  const features = (company.planFeatures || '').toLowerCase();
+  const canUseMultiCurrency = 
+    features.includes('moeda') || 
+    features.includes('multi') || 
+    features.includes('completo') || 
+    features.includes('pro') ||
+    features.includes('ilimitado');
 
   const toggleMultiCurrency = () => {
     if (!canUseMultiCurrency && !company.multiCurrency) {
