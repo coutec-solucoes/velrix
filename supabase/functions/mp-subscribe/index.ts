@@ -202,7 +202,7 @@ serve(async (req: Request) => {
     if (!mpResponse.ok || mpResult.status === 'rejected') {
       const reason = mpResult?.status_detail || mpResult?.message || 'Pagamento rejeitado pelo Mercado Pago';
       return new Response(
-        JSON.stringify({ error: reason, mp_status: mpResult?.status, mp_detail: mpResult?.status_detail }),
+        JSON.stringify({ error: `${reason} (${mpResult?.status_detail || ''})`, mp_status: mpResult?.status, mp_detail: mpResult?.status_detail }),
         { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

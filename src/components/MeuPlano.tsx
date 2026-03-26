@@ -414,30 +414,33 @@ export default function MeuPlano() {
              let errorMessage = 'Pagamento recusado: Verifique os dados do cartão, validade ou limite disponível.';
              
              // Try to find the exact reason returned by Mercado Pago
-             // In some versions, the response body is in error.message (if it's a string) or we can try to find it
+             // Edge Functions sometimes return the error body as part of the error message or in the context
              try {
-               const potentialReason = (error.message || '').toLowerCase();
-               console.log('[MeuPlano] Rejection reason:', potentialReason);
+               const potentialReason = error.message?.toLowerCase() || '';
+               console.log('[MeuPlano] Rejection detail:', potentialReason);
 
                if (potentialReason.includes('insufficient_amount')) {
                  errorMessage = 'Pagamento recusado: Saldo insuficiente no cartão.';
                } else if (potentialReason.includes('high_risk')) {
-                 errorMessage = 'Pagamento recusado: Rejeitado por segurança. Tente outro cartão ou entre em contato com seu banco.';
+                 errorMessage = 'Pagamento recusado: Rejeitado por segurança (Antifraude). Tente outro cartão ou entre em contato com seu banco.';
                } else if (potentialReason.includes('bad_filled')) {
-                 errorMessage = 'Pagamento recusado: Dados do cartão incorretos (número, validade ou CVV).';
+                 errorMessage = 'Pagamento recusado: Dados do cartão incorretos.';
                } else if (potentialReason.includes('call_for_authorize')) {
-                 errorMessage = 'Pagamento recusado: Necessário autorizar com o banco emissor.';
+                 errorMessage = 'Pagamento recusado: Necessário autorizar com o banco.';
                } else if (potentialReason.includes('card_not_active')) {
                  errorMessage = 'Pagamento recusado: O cartão não está ativo.';
-               } else if (potentialReason.includes('payment_method_not_found')) {
-                 errorMessage = 'Pagamento recusado: Método de pagamento não aceito.';
                }
              } catch (e) {
-               console.error('[MeuPlano] Error parsing details:', e);
+               console.error('[MeuPlano] Error parsing rejection:', e);
              }
 
              setCardError(errorMessage);
              setSubmitting(false);
+             
+             // Fallback to PIX if rejected
+             if (planInfo?.country === 'BR') {
+               setTimeout(() => setPaymentTab('pix'), 3000);
+             }
              return;
           }
 
