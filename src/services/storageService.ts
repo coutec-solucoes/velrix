@@ -150,7 +150,7 @@ async function getCompanyContext(): Promise<{ companyId: string | null; companyN
     return { companyId: null, companyName: null };
   }
 
-  const { data: companyId, error } = await supabase.rpc('get_user_company_id');
+  let { data: companyId, error } = await supabase.rpc('get_user_company_id');
   if (error) {
     console.error('[Supabase] get_user_company_id failed:', error.message);
     cachedCompanyContext = { userId, companyId: null, companyName: null };
@@ -158,12 +158,17 @@ async function getCompanyContext(): Promise<{ companyId: string | null; companyN
   }
 
   if (!companyId) {
-    console.warn('[Supabase] get_user_company_id returned NULL for user:', userId);
+    console.warn('[Supabase] get_user_company_id returned NULL, attempting auto-repair for user:', userId);
+    const { data: repairData } = await supabase.rpc('ensure_profile_exists');
+    if (repairData?.success) {
+      const { data: retryId } = await supabase.rpc('get_user_company_id');
+      if (retryId) companyId = retryId;
+    }
   }
 
   let companyName: string | null = null;
   if (companyId) {
-    const { data: companyData } = await supabase.from('companies').select('name').eq('id', companyId).single();
+    const { data: companyData } = await supabase.from('companies').select('name').eq('id', companyId).maybeSingle();
     companyName = companyData?.name ?? null;
   }
 

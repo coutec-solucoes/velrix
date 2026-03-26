@@ -77,7 +77,11 @@ export const allTables: TableSchema[] = [
   {
     name: '_rls_functions',
     description: 'Funções auxiliares para RLS (requerem tabela profiles)',
-    sql: `-- Função para obter o company_id do usuário logado (evita recursão RLS)
+    sql: `DROP FUNCTION IF EXISTS public.get_own_profile();
+DROP FUNCTION IF EXISTS public.get_company_status();
+DROP FUNCTION IF EXISTS public.ensure_profile_exists();
+
+-- Função para obter o company_id do usuário logado (evita recursão RLS)
 CREATE OR REPLACE FUNCTION public.get_user_company_id()
 RETURNS UUID
 LANGUAGE sql
@@ -113,9 +117,8 @@ AS $$
   SELECT role FROM public.profiles WHERE id = auth.uid()
 $$;
 
--- Função para verificar status da empresa do usuário (bypassa RLS de saas_companies)
-CREATE OR REPLACE FUNCTION public.check_company_status()
-RETURNS TABLE(company_status TEXT, company_name TEXT)
+CREATE OR REPLACE FUNCTION public.get_company_status()
+RETURNS TABLE (status TEXT, name TEXT)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
@@ -132,7 +135,7 @@ CREATE OR REPLACE FUNCTION public.get_own_profile()
 RETURNS TABLE(
   id UUID, name TEXT, email TEXT, avatar_url TEXT, role TEXT,
   country TEXT, account_type TEXT, company_name TEXT, document TEXT,
-  phone TEXT, company_id UUID, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+  phone TEXT, company_id UUID, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ, plan_id TEXT
 )
 LANGUAGE sql
 STABLE
@@ -141,9 +144,69 @@ SET search_path = public
 AS $$
   SELECT p.id, p.name, p.email, p.avatar_url, p.role,
          p.country, p.account_type, p.company_name, p.document,
-         p.phone, p.company_id, p.created_at, p.updated_at
+         p.phone, p.company_id, p.created_at, p.updated_at, p.plan_id
   FROM public.profiles p
   WHERE p.id = auth.uid()
+$$;
+
+-- Função de Reparo/Garantia de Perfil (SECURITY DEFINER)
+-- Chamada pelo hook useAuth quando o perfil some ou está incompleto
+CREATE OR REPLACE FUNCTION public.ensure_profile_exists()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  u_id UUID;
+  u_email TEXT;
+  u_name TEXT;
+  p_exists BOOLEAN;
+  new_company_id UUID;
+  p_role TEXT;
+BEGIN
+  u_id := auth.uid();
+  IF u_id IS NULL THEN
+    RETURN '{"success": false, "message": "Não autenticado"}'::json;
+  END IF;
+
+  u_email := auth.jwt()->>'email';
+  u_name := COALESCE(auth.jwt()->'user_metadata'->>'name', '');
+
+  SELECT EXISTS(SELECT 1 FROM public.profiles WHERE id = u_id) INTO p_exists;
+
+  IF NOT p_exists THEN
+    INSERT INTO public.profiles (id, name, email, role, country, account_type)
+    VALUES (u_id, u_name, u_email, 'proprietario', 'BR', 'pessoal');
+  END IF;
+
+  -- Verifica se tem empresa vinculada
+  SELECT company_id, role INTO new_company_id, p_role FROM public.profiles WHERE id = u_id;
+  
+  IF new_company_id IS NULL THEN
+    -- Busca por email em saas_companies (para proprietários que perderam o vínculo)
+    SELECT id INTO new_company_id FROM public.saas_companies WHERE contact_email = u_email LIMIT 1;
+    
+    IF new_company_id IS NOT NULL THEN
+      UPDATE public.profiles SET company_id = new_company_id WHERE id = u_id;
+    ELSE
+      -- Cria nova empresa se for um usuário orfão (ou recém-criado sem trigger)
+      new_company_id := gen_random_uuid();
+      
+      INSERT INTO public.saas_companies (id, name, contact_email, contact_name, status)
+      VALUES (new_company_id, COALESCE(NULLIF(u_name, ''), 'Empresa de ' || u_email), u_email, u_name, 'pendente')
+      ON CONFLICT (id) DO NOTHING;
+      
+      INSERT INTO public.companies (id, name, email)
+      VALUES (new_company_id, COALESCE(NULLIF(u_name, ''), 'Empresa de ' || u_email), u_email)
+      ON CONFLICT (id) DO NOTHING;
+      
+      UPDATE public.profiles SET company_id = new_company_id WHERE id = u_id;
+    END IF;
+  END IF;
+
+  RETURN json_build_object('success', true, 'company_id', new_company_id);
+END;
 $$;`,
   },
 
@@ -666,7 +729,7 @@ CREATE POLICY "Admin can manage settings"
 CREATE POLICY "Admin can update settings"
   ON app_settings FOR UPDATE TO authenticated
   USING (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador'))
-  WITH CHECK (company_id = public.get_user_company_id());`,
+  WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador'));`,
   },
 
   // ========== ADMIN / SAAS TABLES ==========

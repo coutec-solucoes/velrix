@@ -61,30 +61,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabase();
     if (!supabase) return null;
 
-    // Use SECURITY DEFINER RPC to bypass RLS issues
+    // 1. Tenta carregar via RPC otimizado (bypassa RLS)
     const { data: rpcData, error: rpcError } = await supabase.rpc('get_own_profile');
     if (!rpcError && rpcData && rpcData.length > 0) {
       console.log('[Auth] Profile loaded via RPC:', rpcData[0].email);
       return rpcData[0] as UserProfile;
     }
 
-    // Fallback to direct query
-    console.warn('[Auth] RPC get_own_profile failed, falling back to direct query:', rpcError?.message);
+    if (rpcError) {
+      console.warn('[Auth] RPC get_own_profile failed:', rpcError.message);
+    }
+
+    // 2. Tenta Reparo Automático via RPC de Segurança (Cria se não existir)
+    console.log('[Auth] Profile missing or RPC failed. Attempting auto-repair...');
+    const { data: repairData, error: repairError } = await supabase.rpc('ensure_profile_exists');
+    
+    if (!repairError && repairData?.success) {
+      console.log('[Auth] Profile repair successful, retrying fetch...');
+      const { data: retryData } = await supabase.rpc('get_own_profile');
+      if (retryData && retryData.length > 0) {
+        return retryData[0] as UserProfile;
+      }
+    }
+
+    // 3. Fallback final: Consulta direta (sujeito a RLS)
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle();
+
     if (error || !data) {
-      console.error('[Auth] Profile fetch failed:', error?.message);
+      console.error('[Auth] Profile still not found after repair attempt:', error?.message);
       return null;
     }
 
     const userProfile = data as UserProfile;
 
-    // Self-repair logic: if company_id is missing but user is owner, try to find it in saas_companies
+    // Self-repair legado (caso o RPC de reparo tenha falhado mas o registro exista sem company_id)
     if (!userProfile.company_id && userProfile.role === 'proprietario' && userProfile.email) {
-      console.log('[Auth] Profile missing company_id, attempting self-repair for:', userProfile.email);
+      console.log('[Auth] Profile missing company_id, attempting last-resort repair for:', userProfile.email);
       try {
         const { data: saasData, error: saasError } = await supabase
           .from('saas_companies')
