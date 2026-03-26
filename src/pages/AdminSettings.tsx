@@ -117,7 +117,7 @@ export default function AdminSettingsPage() {
 
   const [showPlanForm, setShowPlanForm] = useState(false);
   const [editPlanId, setEditPlanId] = useState<string | null>(null);
-  const [planForm, setPlanForm] = useState({ name: '', price: '', currency: 'BRL' as 'BRL' | 'PYG' | 'USD', features: '' });
+  const [planForm, setPlanForm] = useState({ name: '', price: '', annualPrice: '', currency: 'BRL' as 'BRL' | 'PYG' | 'USD', features: '' });
 
   useEffect(() => {
     const load = async () => {
@@ -169,13 +169,21 @@ export default function AdminSettingsPage() {
 
   const handleSavePlan = async () => {
     if (!planForm.name || !planForm.price) return;
+    const planData = { 
+      name: planForm.name, 
+      price: parseFloat(planForm.price), 
+      annualPrice: planForm.annualPrice ? parseFloat(planForm.annualPrice) : undefined,
+      currency: planForm.currency, 
+      features: planForm.features 
+    };
+
     if (editPlanId) {
-      await updatePlanSupa(editPlanId, { name: planForm.name, price: parseFloat(planForm.price), currency: planForm.currency, features: planForm.features });
+      await updatePlanSupa(editPlanId, planData);
     } else {
-      await createPlan({ name: planForm.name, price: parseFloat(planForm.price), currency: planForm.currency, features: planForm.features });
+      await createPlan(planData);
     }
     const p = await fetchPlans(); setPlans(p); setShowPlanForm(false); setEditPlanId(null);
-    setPlanForm({ name: '', price: '', currency: 'BRL', features: '' });
+    setPlanForm({ name: '', price: '', annualPrice: '', currency: 'BRL', features: '' });
   };
 
   // ===== Database Verification =====
@@ -776,7 +784,8 @@ CREATE POLICY "Admin can manage settings"
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div><label className="text-white/50 text-xs mb-1 block">Nome *</label><input value={planForm.name} onChange={e => setPlanForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Profissional" className={inputClass} /></div>
-                <div><label className="text-white/50 text-xs mb-1 block">Preço *</label><input type="number" step="0.01" value={planForm.price} onChange={e => setPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="299.90" className={inputClass} /></div>
+                <div><label className="text-white/50 text-xs mb-1 block">Preço Mensal *</label><input type="number" step="0.01" value={planForm.price} onChange={e => setPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="299.90" className={inputClass} /></div>
+                <div><label className="text-white/50 text-xs mb-1 block">Preço Anual</label><input type="number" step="0.01" value={planForm.annualPrice} onChange={e => setPlanForm(f => ({ ...f, annualPrice: e.target.value }))} placeholder="2990.00" className={inputClass} /></div>
                 <div><label className="text-white/50 text-xs mb-1 block">Moeda</label>
                   <select value={planForm.currency} onChange={e => setPlanForm(f => ({ ...f, currency: e.target.value as any }))} className={`${inputClass} [&>option]:bg-gray-900`}>
                     <option value="BRL">R$ (BRL)</option><option value="PYG">₲ (PYG)</option><option value="USD">$ (USD)</option>
@@ -795,16 +804,23 @@ CREATE POLICY "Admin can manage settings"
                   <p className="text-white text-sm font-medium">{p.name}</p>
                   <p className="text-white/40 text-xs mt-0.5">{p.features}</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-white font-semibold text-sm">
-                    {p.currency === 'PYG' ? `₲ ${p.price.toLocaleString('es-PY')}` : p.currency === 'USD' ? `$ ${p.price.toFixed(2)}` : `R$ ${p.price.toFixed(2)}`}
-                  </span>
-                  <button onClick={() => { setEditPlanId(p.id); setPlanForm({ name: p.name, price: String(p.price), currency: p.currency, features: p.features }); setShowPlanForm(true); }}
+                  <div className="text-right">
+                    <p className="text-white font-semibold text-sm">
+                      {p.currency === 'PYG' ? `₲ ${p.price.toLocaleString('es-PY')}` : p.currency === 'USD' ? `$ ${p.price.toFixed(2)}` : `R$ ${p.price.toFixed(2)}`}
+                      <span className="text-white/40 text-[10px] ml-1">/mês</span>
+                    </p>
+                    {p.annualPrice && (
+                      <p className="text-secondary text-[10px] font-medium">
+                        {p.currency === 'PYG' ? `₲ ${p.annualPrice.toLocaleString('es-PY')}` : p.currency === 'USD' ? `$ ${p.annualPrice.toFixed(2)}` : `R$ ${p.annualPrice.toFixed(2)}`}
+                        <span className="opacity-60 ml-1">/ano</span>
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => { setEditPlanId(p.id); setPlanForm({ name: p.name, price: String(p.price), annualPrice: p.annualPrice ? String(p.annualPrice) : '', currency: p.currency, features: p.features }); setShowPlanForm(true); }}
                     className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"><Edit2 size={14} /></button>
                   <button onClick={async () => { await deletePlanSupa(p.id); const pl = await fetchPlans(); setPlans(pl); }}
                     className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/40 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
                 </div>
-              </div>
             ))}
           </div>
         </div>

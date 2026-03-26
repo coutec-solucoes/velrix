@@ -11,6 +11,7 @@ export interface RegisterData {
   document: string;
   phone: string;
   planId?: string;
+  billingCycle?: 'mensal' | 'anual';
 }
 
 /**
@@ -35,6 +36,7 @@ export async function registerAccount(data: RegisterData, isTrial: boolean = fal
         document: data.document,
         phone: data.phone,
         plan_id: data.planId,
+        billing_cycle: data.billingCycle || 'mensal',
       },
     },
   });

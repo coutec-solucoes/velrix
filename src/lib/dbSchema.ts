@@ -736,6 +736,7 @@ CREATE POLICY "Admin can update payments"
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   price NUMERIC(15,2) NOT NULL DEFAULT 0,
+  annual_price NUMERIC(15,2),
   currency TEXT NOT NULL DEFAULT 'BRL' CHECK (currency IN ('BRL', 'PYG', 'USD')),
   features TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

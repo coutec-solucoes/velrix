@@ -6,9 +6,10 @@ import { initiatePayment } from '@/services/paymentService';
 
 interface PlanInfo {
   name: string;
-  price: number;
   currency: string;
   features: string;
+  price: number;
+  annualPrice?: number;
   status: string;
   planExpiry: string | null;
   daysLeft: number;
@@ -102,6 +103,7 @@ export default function MeuPlano() {
 
       let planName = 'Sem plano';
       let price = 0;
+      let dbAnnualPrice: number | undefined = undefined;
       let currency = 'BRL';
       let features = '';
 
@@ -114,6 +116,7 @@ export default function MeuPlano() {
         if (plan) {
           planName = plan.name;
           price = Number(plan.price);
+          dbAnnualPrice = plan.annual_price ? Number(plan.annual_price) : undefined;
           currency = plan.currency;
           features = plan.features || '';
         }
@@ -134,6 +137,7 @@ export default function MeuPlano() {
       setPlanInfo({
         name: planName,
         price,
+        annualPrice: dbAnnualPrice,
         currency,
         features,
         status: company.status || 'pendente',
@@ -155,7 +159,7 @@ export default function MeuPlano() {
   // ── Billing cycle computed ────────────────────────────────────────────────
   const isAnnual = billingCycle === 'anual';
   const monthlyPrice = planInfo?.price || 0;
-  const annualPrice = Math.round(monthlyPrice * 10); // 2 months free
+  const annualPrice = planInfo?.annualPrice || Math.round(monthlyPrice * 10); // 2 months free fallback
   const activePrice = isAnnual ? annualPrice : monthlyPrice;
 
   // ── PIX ──────────────────────────────────────────────────────────────────
@@ -323,7 +327,7 @@ export default function MeuPlano() {
       // ── Fallback: update company status directly (test/dev mode) ────────
       if (!activationSuccess) {
         const expiry = new Date();
-        expiry.setDate(expiry.getDate() + 30);
+        expiry.setDate(expiry.getDate() + (isAnnual ? 365 : 30));
 
         const { error: dbError } = await supabase
           .from('saas_companies')
@@ -343,10 +347,10 @@ export default function MeuPlano() {
         // Record payment attempt
         await supabase.from('saas_payments').insert({
           company_id: planInfo?.companyId,
-          amount: planInfo?.price,
+          amount: activePrice,
           currency: planInfo?.currency || 'BRL',
           status: 'pago',
-          description: `Assinatura ${planInfo?.name} — Cartão (token: ${cardToken.id.slice(0, 8)}...)`,
+          description: `${isAnnual ? 'Plano Anual' : 'Assinatura'} ${planInfo?.name} — Ativação Direta (token: ${cardToken.id.slice(0, 8)}...)`,
           date: new Date().toISOString(),
         }).single();
 

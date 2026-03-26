@@ -28,6 +28,7 @@ export default function Register({ onBackToLogin }: Props) {
   const [success, setSuccess] = useState(false);
   const [plans, setPlans] = useState<SaasPlan[]>([]);
   const [planId, setPlanId] = useState('');
+  const [billingCycle, setBillingCycle] = useState<'mensal' | 'anual'>('mensal');
 
   useEffect(() => {
     fetchPlans().then((fetchedPlans) => {
@@ -114,6 +115,7 @@ export default function Register({ onBackToLogin }: Props) {
         document,
         phone,
         planId: planId || undefined,
+        billingCycle,
       }, true); // isTrial = true always
 
       if (err === 'register_email_exists') {
@@ -287,7 +289,20 @@ export default function Register({ onBackToLogin }: Props) {
                 <input type="tel" value={phone} onChange={(e) => setPhone(applyPhoneMask(e.target.value, country))} className={inputClass} placeholder={getPhonePlaceholder()} required />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2 text-white/90">Escolha seu plano <span className="text-green-400 text-xs font-normal">(7 dias grátis!)</span></label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-white/90">Escolha seu plano <span className="text-green-400 text-xs font-normal">(7 dias grátis!)</span></label>
+                  <div className="flex items-center gap-2 bg-white/10 p-1 rounded-lg border border-white/10 scale-90 origin-right">
+                    <button type="button" onClick={() => setBillingCycle('mensal')} 
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${billingCycle === 'mensal' ? 'bg-secondary text-secondary-foreground shadow-lg' : 'text-white/40 hover:text-white'}`}>
+                      MENSAL
+                    </button>
+                    <button type="button" onClick={() => setBillingCycle('anual')} 
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${billingCycle === 'anual' ? 'bg-secondary text-secondary-foreground shadow-lg' : 'text-white/40 hover:text-white'}`}>
+                      ANUAL
+                      <span className="bg-green-500 text-white px-1.5 py-0.5 rounded text-[8px] animate-pulse whitespace-nowrap">-2 meses</span>
+                    </button>
+                  </div>
+                </div>
                 {filteredPlans.length === 0 && (
                   <p className="text-white/40 text-xs">{plans.length === 0 ? 'Carregando planos...' : 'Nenhum plano para este país'}</p>
                 )}
@@ -322,8 +337,10 @@ export default function Register({ onBackToLogin }: Props) {
                             {p.features && <p className="text-white/50 text-[10px] truncate">{p.features}</p>}
                           </div>
                           <div className="text-right">
-                            <p className="text-secondary font-bold text-sm">{p.currency === 'PYG' ? '₲' : 'R$'} {p.price.toLocaleString()}</p>
-                            <p className="text-white/40 text-[9px]">/mês após trial</p>
+                            <p className="text-secondary font-bold text-sm">
+                              {p.currency === 'PYG' ? '₲' : 'R$'} {billingCycle === 'anual' ? (p.annualPrice || Math.round(p.price * 10)).toLocaleString() : p.price.toLocaleString()}
+                            </p>
+                            <p className="text-white/40 text-[9px]">/{billingCycle === 'anual' ? 'ano' : 'mês'} após trial</p>
                           </div>
                         </div>
                       </button>

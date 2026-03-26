@@ -41,6 +41,7 @@ export interface SaasPlan {
   id: string;
   name: string;
   price: number;
+  annualPrice?: number;
   currency: 'BRL' | 'PYG' | 'USD';
   features: string;
 }

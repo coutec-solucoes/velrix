@@ -251,17 +251,35 @@ export function generateRandomPassword(length = 10): string {
 export async function fetchPlans(): Promise<SaasPlan[]> {
   const { data, error } = await supabase.from('saas_plans').select('*').order('created_at', { ascending: false });
   if (error) { console.error('fetchPlans error:', error); return []; }
-  return (data || []).map(p => ({ id: p.id, name: p.name, price: Number(p.price), currency: p.currency, features: p.features }));
+  return (data || []).map(p => ({ 
+    id: p.id, 
+    name: p.name, 
+    price: Number(p.price), 
+    annualPrice: p.annual_price ? Number(p.annual_price) : undefined,
+    currency: p.currency, 
+    features: p.features 
+  }));
 }
 
 export async function createPlan(plan: Omit<SaasPlan, 'id'>) {
-  const { error } = await supabase.from('saas_plans').insert({ name: plan.name, price: plan.price, currency: plan.currency, features: plan.features });
+  const { error } = await supabase.from('saas_plans').insert({ 
+    name: plan.name, 
+    price: plan.price, 
+    annual_price: plan.annualPrice || null,
+    currency: plan.currency, 
+    features: plan.features 
+  });
   if (error) console.error('createPlan error:', error);
   else await logActivity('Plano criado', plan.name);
 }
 
 export async function updatePlanSupa(id: string, updates: Partial<SaasPlan>) {
-  const { error } = await supabase.from('saas_plans').update(updates).eq('id', id);
+  const mapped: any = { ...updates };
+  if (updates.annualPrice !== undefined) {
+    mapped.annual_price = updates.annualPrice;
+    delete mapped.annualPrice;
+  }
+  const { error } = await supabase.from('saas_plans').update(mapped).eq('id', id);
   if (error) console.error('updatePlan error:', error);
 }
 
