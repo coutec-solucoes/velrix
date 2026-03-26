@@ -519,7 +519,7 @@ export default function MeuPlano() {
                 <div>
                   <h2 className="text-body font-semibold mb-1">Pagar via PIX</h2>
                   <p className="text-muted-foreground text-sm">
-                    Gere o QR Code PIX e pague com qualquer banco. A renovação mensal precisa ser feita manualmente.
+                    Gere o QR Code PIX e pague com qualquer banco. A renovação {isAnnual ? 'anual' : 'mensal'} precisa ser feita manualmente.
                   </p>
                 </div>
 
@@ -528,9 +528,9 @@ export default function MeuPlano() {
                   <div>
                     <p className="text-sm text-muted-foreground">Valor a pagar</p>
                     <p className="text-2xl font-bold text-secondary">
-                      {currencySymbol} {planInfo?.price?.toLocaleString() || '0'}
+                      {currencySymbol} {activePrice.toLocaleString()}
                     </p>
-                    <p className="text-xs text-muted-foreground">{planInfo?.name} — 1 mês</p>
+                    <p className="text-xs text-muted-foreground">{planInfo?.name} — {isAnnual ? '12 meses' : '1 mês'}</p>
                   </div>
                   <div className="text-4xl">🏦</div>
                 </div>
@@ -549,7 +549,7 @@ export default function MeuPlano() {
                     style={{ background: 'linear-gradient(135deg, #00b06b 0%, #00d4aa 100%)', color: '#fff' }}
                   >
                     {pixLoading ? <Loader2 size={18} className="animate-spin" /> : <Smartphone size={18} />}
-                    {pixLoading ? 'Gerando PIX...' : `Gerar QR Code PIX — ${currencySymbol} ${planInfo?.price?.toLocaleString()}`}
+                    {pixLoading ? 'Gerando PIX...' : `Gerar QR Code PIX — ${currencySymbol} ${activePrice.toLocaleString()}`}
                   </button>
                 ) : (
                   <div className="space-y-4 animate-fade-in">
