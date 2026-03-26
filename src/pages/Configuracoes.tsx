@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getAppData, updateSettings, addExchangeRateSnapshot, getExchangeRateHistory } from '@/services/storageService';
+import { getAppData, updateSettings, addExchangeRateSnapshot, getExchangeRateHistory, onDataChange } from '@/services/storageService';
 import { AppSettings, Currency, Country, AppLanguage, ExchangeRateSnapshot, LateFeeSettings } from '@/types';
 import { useTranslation } from '@/hooks/useI18n';
 import { Save, Building2, Coins, Globe, CheckCircle2, ArrowRightLeft, ToggleLeft, ToggleRight, History, UserCog, Percent, Upload, Route, X as XIcon, BookOpen, CreditCard } from 'lucide-react';
@@ -50,15 +50,17 @@ export default function Configuracoes() {
   const [saving, setSaving] = useState(false);
   const { t, setLanguage } = useTranslation();
 
-  useEffect(() => {
+  const load = useCallback(() => {
     const data = getAppData();
     const company = data.settings.company as any;
+    
     if (!('multiCurrency' in company)) {
       company.multiCurrency = true;
       company.country = 'BR';
       company.language = 'pt-BR';
       company.currencyPriority = company.activeCurrencies?.length ? [...company.activeCurrencies] : ['BRL', 'PYG', 'USD'];
     }
+    
     // Initialize exchange rates if missing, empty, or incomplete
     const hasRates = Array.isArray(company.exchangeRates) && company.exchangeRates.length >= 6;
     if (!hasRates) {
@@ -75,9 +77,20 @@ export default function Configuracoes() {
         { pair: 'PYG_USD', rate: findExisting('PYG_USD') || (oldRates?.['USD_PYG'] ? 1 / oldRates['USD_PYG'] : 0.000154), updatedAt: now },
       ];
     }
-    setSettings(data.settings);
+    setSettings({ ...data.settings });
     setHistory(getExchangeRateHistory());
   }, []);
+
+  useEffect(() => {
+    load();
+    // Listen for data changes (e.g. initial pull finishing)
+    const unsubscribe = onDataChange((table) => {
+      if (table === 'companies' || table === 'exchange_rate_history') {
+        load();
+      }
+    });
+    return unsubscribe;
+  }, [load]);
 
   if (!settings) return null;
 
