@@ -66,6 +66,9 @@ export interface AdminSettings {
   pagoparPrivateKey?: string;
   bancardPublicKey?: string;
   bancardPrivateKey?: string;
+  // Mercado Pago (cartão de crédito recorrente)
+  mpPublicKey?: string;
+  mpSecretKey?: string;
 }
 
 export interface AdminData {

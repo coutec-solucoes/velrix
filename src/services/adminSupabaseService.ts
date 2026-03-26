@@ -14,6 +14,8 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   pagoparPrivateKey: '',
   bancardPublicKey: '',
   bancardPrivateKey: '',
+  mpPublicKey: '',
+  mpSecretKey: '',
 };
 
 function readSettingsCache(): AdminSettings | null {
@@ -50,6 +52,8 @@ function mapAdminSettingsRows(rows: any[]): AdminSettings {
     if (row.key === 'pagoparPrivateKey') settings.pagoparPrivateKey = row.value;
     if (row.key === 'bancardPublicKey') settings.bancardPublicKey = row.value;
     if (row.key === 'bancardPrivateKey') settings.bancardPrivateKey = row.value;
+    if (row.key === 'mpPublicKey') settings.mpPublicKey = row.value;
+    if (row.key === 'mpSecretKey') settings.mpSecretKey = row.value;
   });
   return settings;
 }

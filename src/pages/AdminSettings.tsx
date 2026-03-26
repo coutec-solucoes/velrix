@@ -888,6 +888,53 @@ CREATE POLICY "Admin can manage settings"
             </div>
           </div>
 
+          {/* Mercado Pago */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2 text-white/70 text-sm">
+                <span className="text-lg">💳</span> Mercado Pago — Cartão de Crédito Recorrente
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${settings.mpPublicKey?.startsWith('TEST-') ? 'bg-amber-500/20 text-amber-300' : settings.mpPublicKey ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-white/40'}`}>
+                {settings.mpPublicKey?.startsWith('TEST-') ? '🧪 Modo Teste' : settings.mpPublicKey ? '✅ Produção' : 'Não configurado'}
+              </span>
+            </div>
+            <p className="text-white/40 text-xs">
+              Chaves disponíveis em <strong className="text-white/60">mercadopago.com → Seu negócio → Credenciais</strong>.
+              Use chaves <code className="text-amber-300">TEST-</code> para testes e chaves de produção para cobranças reais.
+            </p>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="text-white/50 text-xs mb-1 block">Public Key <span className="text-amber-300">(obrigatório para tokenizar cartão)</span></label>
+                <input
+                  value={settings.mpPublicKey || ''}
+                  onChange={e => setSettings(s => ({ ...s, mpPublicKey: e.target.value }))}
+                  className={inputClass}
+                  placeholder="TEST-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                />
+              </div>
+              <div>
+                <label className="text-white/50 text-xs mb-1 block">Secret Key (Access Token) <span className="text-white/30">(para processar cobranças no backend)</span></label>
+                <input
+                  type="password"
+                  value={settings.mpSecretKey || ''}
+                  onChange={e => setSettings(s => ({ ...s, mpSecretKey: e.target.value }))}
+                  className={inputClass}
+                  placeholder="TEST-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                />
+              </div>
+            </div>
+            {settings.mpPublicKey && (
+              <div className={`flex items-start gap-2 p-3 rounded-lg text-xs ${settings.mpPublicKey.startsWith('TEST-') ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>
+                <span className="text-base leading-none">{settings.mpPublicKey.startsWith('TEST-') ? '🧪' : '✅'}</span>
+                <span>
+                  {settings.mpPublicKey.startsWith('TEST-')
+                    ? 'Modo TESTE ativo — nenhuma cobrança real será feita. Troque pelas chaves de produção quando estiver pronto para ir ao ar.'
+                    : 'Modo PRODUÇÃO ativo — cobranças reais serão processadas.'}
+                </span>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <button onClick={handleSaveSettings} className="flex items-center gap-1.5 px-6 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
               <Save size={16} /> Salvar Configurações de APIs
