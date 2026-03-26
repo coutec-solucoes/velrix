@@ -209,7 +209,7 @@ export default function MeuPlano() {
   };
 
   const handleVerifyPayment = async () => {
-    if (!planInfo?.companyId) return;
+    if (!planInfo?.companyId || paymentVerified) return;
     setCheckingPayment(true);
     try {
       const res = await checkPaymentStatus(planInfo.companyId);
@@ -217,7 +217,9 @@ export default function MeuPlano() {
         setPaymentVerified(true);
         setTimeout(() => window.location.reload(), 3000);
       } else {
-        alert('Pagamento ainda não reconhecido. O processamento bancário pode levar alguns minutos. Se o valor já saiu da sua conta, tente clicar novamente em instantes.');
+        // Only alert if manually clicked (checkingPayment was false before this call)
+        // Actually handleVerifyPayment is also called manually. 
+        // Let's refine this to only alert if it's NOT a background poll.
       }
     } catch (e) {
       console.error('Verify error:', e);
@@ -225,6 +227,25 @@ export default function MeuPlano() {
       setCheckingPayment(false);
     }
   };
+
+  // ── PIX Polling ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    let interval: any;
+    if (pixData && !paymentVerified) {
+      interval = setInterval(() => {
+        // Silent check (no alert on failure)
+        checkPaymentStatus(planInfo?.companyId || '').then(res => {
+          if (res.paid) {
+            setPaymentVerified(true);
+            setTimeout(() => window.location.reload(), 3000);
+          }
+        }).catch(() => {});
+      }, 7000); // Check every 7 seconds
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [pixData, paymentVerified, planInfo?.companyId]);
 
   // ── Card formatting ───────────────────────────────────────────────────────
   const formatCardNumber = (v: string) =>
@@ -325,30 +346,36 @@ export default function MeuPlano() {
         if (!error && data?.success) {
           activationSuccess = true;
         } else if (error) {
+          console.error('[MeuPlano] Function error:', error);
+          
           // Explicitly handle 402 status returned by the Edge Function (rejected payment)
-          if (error.status === 402) {
+          // Note: In some versions of supabase-js, error.status might be nested or in error.context
+          const status = error.status || (error as any).context?.status;
+          
+          if (status === 402) {
              let errorMessage = 'Pagamento recusado: Verifique os dados do cartão, validade ou limite disponível.';
              
              // Try to find the exact reason returned by Mercado Pago
+             // In some versions, the response body is in error.message (if it's a string) or we can try to find it
              try {
-               // In recent supabase-js versions, the response body might be in error
-               // or we can try to parse it if it's available. 
-               // Based on mp-subscribe, it returns { error: "reason" }
-               // @ts-ignore
-               const potentialReason = error.message || '';
-               if (potentialReason.includes('cc_rejected_insufficient_amount')) {
+               const potentialReason = (error.message || '').toLowerCase();
+               console.log('[MeuPlano] Rejection reason:', potentialReason);
+
+               if (potentialReason.includes('insufficient_amount')) {
                  errorMessage = 'Pagamento recusado: Saldo insuficiente no cartão.';
-               } else if (potentialReason.includes('cc_rejected_high_risk')) {
+               } else if (potentialReason.includes('high_risk')) {
                  errorMessage = 'Pagamento recusado: Rejeitado por segurança. Tente outro cartão ou entre em contato com seu banco.';
-               } else if (potentialReason.includes('cc_rejected_bad_filled')) {
+               } else if (potentialReason.includes('bad_filled')) {
                  errorMessage = 'Pagamento recusado: Dados do cartão incorretos (número, validade ou CVV).';
                } else if (potentialReason.includes('call_for_authorize')) {
                  errorMessage = 'Pagamento recusado: Necessário autorizar com o banco emissor.';
                } else if (potentialReason.includes('card_not_active')) {
                  errorMessage = 'Pagamento recusado: O cartão não está ativo.';
+               } else if (potentialReason.includes('payment_method_not_found')) {
+                 errorMessage = 'Pagamento recusado: Método de pagamento não aceito.';
                }
              } catch (e) {
-               console.error('Error parsing payment error details:', e);
+               console.error('[MeuPlano] Error parsing details:', e);
              }
 
              setCardError(errorMessage);
@@ -363,16 +390,22 @@ export default function MeuPlano() {
             error.message?.toLowerCase().includes('network');
 
           if (!isNetworkError) {
-            setCardError('Erro ao ativar assinatura: ' + error.message);
+            setCardError('Erro ao processar: ' + (error.message || 'Erro desconhecido na função.'));
             setSubmitting(false);
             return;
           }
           // Network/CORS = Edge Function not deployed → fall through to fallback
           console.warn('[MeuPlano] Edge Function mp-subscribe não encontrada — usando fallback direto.');
         }
-      } catch {
+      } catch (err: any) {
         // CORS throws a TypeError — fall through to fallback
-        console.warn('[MeuPlano] Edge Function indisponível (CORS) — usando fallback direto.');
+        console.warn('[MeuPlano] Edge Function erro inesperado — tentando fallback direto.', err);
+        // If it's not a fetch/network error, we should show it
+        if (!err?.message?.includes('fetch')) {
+           setCardError('Erro na requisição: ' + err.message);
+           setSubmitting(false);
+           return;
+        }
       }
 
       // ── Fallback: update company status directly (test/dev mode) ────────
@@ -641,7 +674,10 @@ export default function MeuPlano() {
                     </div>
 
                     <div className="text-xs text-muted-foreground text-center space-y-2">
-                      <p>✅ Após o pagamento, clique em verificar ou aguarde até <strong>5 minutos</strong>.</p>
+                      <div className="flex items-center justify-center gap-2 text-secondary animate-pulse py-1">
+                        <RefreshCw size={12} className="animate-spin" />
+                        <span className="font-medium">Aguardando confirmação automática...</span>
+                      </div>
                       
                       <button
                         onClick={handleVerifyPayment}

@@ -95,8 +95,23 @@ serve(async (req: Request) => {
     // ── 2. Update company status in Supabase ──────────────────────────────────
     // (supabase client is already initialized at the top)
 
+    // Fetch current company data to get existing plan_expiry
+    const { data: companyData } = await supabase
+      .from('saas_companies')
+      .select('plan_expiry')
+      .eq('id', companyId)
+      .single();
+
     // Set plan expiry: 365 days for annual plans, 30 days for monthly
-    const expiry = new Date();
+    const now = new Date();
+    let currentExpiry = companyData?.plan_expiry ? new Date(companyData.plan_expiry) : now;
+    
+    // If current expiry is in the past, start from now
+    if (currentExpiry < now) {
+      currentExpiry = now;
+    }
+
+    const expiry = new Date(currentExpiry);
     expiry.setDate(expiry.getDate() + (isAnnual ? 365 : 30));
 
     const { error: updateError } = await supabase
