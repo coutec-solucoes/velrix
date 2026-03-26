@@ -20,8 +20,66 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual } = await req.json();
+    const body = await req.json();
+    const { action, paymentId, companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual } = body;
 
+    // ── PIX Verification Logic (New) ─────────────────────────────────────────
+    if (action === 'check' || paymentId) {
+      if (!paymentId) {
+        return new Response(JSON.stringify({ error: 'ID de pagamento ausente' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+      const { data: settingsData } = await supabase.from('admin_settings').select('value').eq('key', 'mpSecretKey').single();
+      const mpAccessToken = settingsData?.value || Deno.env.get('MP_ACCESS_TOKEN');
+
+      if (!mpAccessToken) {
+        return new Response(JSON.stringify({ error: 'MP Access Token não configurado' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { 'Authorization': `Bearer ${mpAccessToken}` },
+      });
+
+      if (!mpResponse.ok) {
+        return new Response(JSON.stringify({ error: 'Erro ao consultar Mercado Pago' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const mpPayment = await mpResponse.json();
+      
+      if (mpPayment.status === 'approved') {
+        const finalCompanyId = companyId || mpPayment.metadata?.company_id;
+        if (finalCompanyId) {
+          // Calculate cumulative expiry
+          const { data: companyData } = await supabase.from('saas_companies').select('plan_expiry').eq('id', finalCompanyId).single();
+          const now = new Date();
+          let currentExpiry = companyData?.plan_expiry ? new Date(companyData.plan_expiry) : now;
+          if (currentExpiry < now) currentExpiry = now;
+          const days = (mpPayment.metadata?.is_annual === true || mpPayment.metadata?.is_annual === 'true') ? 365 : 30;
+          const expiry = new Date(currentExpiry);
+          expiry.setDate(expiry.getDate() + days);
+
+          await supabase.from('saas_companies').update({ status: 'ativo', plan_expiry: expiry.toISOString() }).eq('id', finalCompanyId);
+          
+          // Record Payment
+          const { data: existing } = await supabase.from('saas_payments').select('id').eq('description', `Confirmação PIX (${paymentId})`).maybeSingle();
+          if (!existing) {
+            await supabase.from('saas_payments').insert({
+              company_id: finalCompanyId,
+              amount: mpPayment.transaction_amount,
+              currency: mpPayment.currency_id || 'BRL',
+              status: 'pago',
+              description: `Confirmação PIX (${paymentId})`,
+              date: new Date().toISOString(),
+            });
+          }
+        }
+        return new Response(JSON.stringify({ paid: true, status: 'approved' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ paid: false, status: mpPayment.status }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ── Original Card Subscription Logic ────────────────────────────────────
     if (!companyId || !tokenId || !price) {
       return new Response(
         JSON.stringify({ error: 'Parâmetros obrigatórios ausentes: companyId, tokenId, price' }),

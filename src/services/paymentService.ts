@@ -242,8 +242,8 @@ export async function checkExternalPaymentStatus(paymentId: string, companyId: s
     const supabase = getSupabase();
     if (!supabase) return { paid: false, error: 'Supabase not configured' };
 
-    const { data, error } = await supabase.functions.invoke('mp-check', {
-      body: { paymentId, companyId },
+    const { data, error } = await supabase.functions.invoke('mp-subscribe', {
+      body: { action: 'check', paymentId, companyId },
     });
 
     if (error) throw error;
