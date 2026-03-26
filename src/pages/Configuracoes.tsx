@@ -143,7 +143,7 @@ export default function Configuracoes() {
 
   const toggleMultiCurrency = () => {
     if (!canUseMultiCurrency && !company.multiCurrency) {
-      alert('Seu plano atual não permite habilitar múltiplas moedas. Migrar para o Plano Completo no painel Admin.');
+      alert('Seu plano atual não permite habilitar múltiplas moedas. Entre em contato com o suporte para realizar o upgrade para o Plano Completo.');
       return;
     }
     updateCompany({ multiCurrency: !company.multiCurrency });
@@ -151,7 +151,7 @@ export default function Configuracoes() {
 
   const toggleCobradores = () => {
     if (!canUseCobradores && !settings.cobradoresEnabled) {
-      alert('Seu plano atual não permite habilitar o Módulo de Cobradores. Verifique seu contrato ou migre de plano no painel Admin.');
+      alert('Seu plano atual não permite habilitar o Módulo de Cobradores. Entre em contato com o suporte para realizar o upgrade.');
       return;
     }
     setSettings({ ...settings, cobradoresEnabled: !settings.cobradoresEnabled });
