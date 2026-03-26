@@ -1,2 +1,5 @@
 [functions.authenticate-collaborator]
 verify_jwt = false
+
+[functions.mp-subscribe]
+verify_jwt = false
