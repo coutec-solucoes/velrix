@@ -679,6 +679,16 @@ export default function MeuPlano() {
                       </p>
                     </div>
 
+                    {!pixData.externalId && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
+                        <AlertTriangle size={15} className="text-amber-400 flex-shrink-0" />
+                        <p className="text-amber-300 text-xs leading-relaxed">
+                          <strong>Aviso:</strong> A confirmação automática via Mercado Pago falhou (Erro 401). 
+                          Este é um QR Code estático. Após o pagamento, entre em contato com o suporte para ativação manual.
+                        </p>
+                      </div>
+                    )}
+
                     {/* Copy code */}
                     <div className="bg-muted/40 border border-border rounded-xl p-4 space-y-2">
                       <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">PIX Copia e Cola</p>
