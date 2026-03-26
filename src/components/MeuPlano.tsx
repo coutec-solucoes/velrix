@@ -403,6 +403,31 @@ export default function MeuPlano() {
 
         if (!error && data?.success) {
           activationSuccess = true;
+        } else if (data && data.success === false) {
+          // Explicit failure from Edge Function (Rejection)
+          console.warn('[MeuPlano] Payment rejected:', data);
+          let errorMessage = 'Pagamento recusado: Verifique os dados do cartão, validade ou limite disponível.';
+          const detail = (data.error || '').toLowerCase();
+
+          if (detail.includes('insufficient_amount')) {
+            errorMessage = 'Pagamento recusado: Saldo insuficiente no cartão.';
+          } else if (detail.includes('high_risk')) {
+            errorMessage = 'Pagamento recusado: Rejeitado por segurança (Antifraude). Tente outro cartão ou entre em contato com seu banco.';
+          } else if (detail.includes('bad_filled')) {
+            errorMessage = 'Pagamento recusado: Dados do cartão incorretos.';
+          } else if (detail.includes('call_for_authorize')) {
+            errorMessage = 'Pagamento recusado: Necessário autorizar com o banco.';
+          } else if (detail.includes('card_not_active')) {
+            errorMessage = 'Pagamento recusado: O cartão não está ativo.';
+          }
+
+          setCardError(errorMessage);
+          setSubmitting(false);
+
+          if (planInfo?.country === 'BR') {
+            setTimeout(() => setPaymentTab('pix'), 4000);
+          }
+          return;
         } else if (error) {
           console.error('[MeuPlano] Function error:', error);
           
