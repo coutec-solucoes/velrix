@@ -136,9 +136,19 @@ export async function updateCompanyExpirySupa(id: string, planExpiry: string) {
 }
 
 export async function deleteCompanySupa(id: string) {
-  const { error } = await supabase.from('saas_companies').delete().eq('id', id);
-  if (error) console.error('deleteCompany error:', error);
-  else await logActivity('Empresa excluída', id);
+  // 1. Delete operational company (cascades to clients, users, transactions, etc.)
+  const { error: opError } = await supabase.from('companies').delete().eq('id', id);
+  if (opError) console.error('delete operational company error:', opError);
+
+  // 2. Clear profiles company_id so users aren't orphaned with a dead link
+  const { error: profError } = await supabase.from('profiles').update({ company_id: null }).eq('company_id', id);
+  if (profError) console.error('clear profiles company error:', profError);
+
+  // 3. Delete SaaS billing company (cascades to saas_payments)
+  const { error: saasError } = await supabase.from('saas_companies').delete().eq('id', id);
+  if (saasError) console.error('delete saas company error:', saasError);
+
+  if (!opError && !saasError) await logActivity('Empresa excluída permanentemente', id);
 }
 
 // ===== Payments =====
