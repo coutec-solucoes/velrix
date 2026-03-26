@@ -190,7 +190,7 @@ export default function Register({ onBackToLogin }: Props) {
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
         style={{ backgroundImage: `url(${veltorBg})` }}
       />
-      <div className="w-full max-w-sm flex flex-col items-center relative z-10">
+      <div className="w-full max-w-md flex flex-col items-center relative z-10">
         <img
           src={veltorLogo}
           alt="Veltor"
@@ -206,12 +206,12 @@ export default function Register({ onBackToLogin }: Props) {
               }`}>
                 {s < step ? '✓' : s}
               </div>
-              {s < 2 && <div className={`w-8 h-0.5 ${s < step ? 'bg-green-500' : 'bg-white/20'}`} />}
+              {s < 2 && <div className={`w-12 h-0.5 ${s < step ? 'bg-green-500' : 'bg-white/20'}`} />}
             </div>
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="w-full bg-black/40 backdrop-blur-md rounded-xl border border-white/10 p-5 space-y-3.5 shadow-2xl">
+        <form onSubmit={handleSubmit} className="w-full bg-black/40 backdrop-blur-md rounded-xl border border-white/10 p-6 space-y-4 shadow-2xl">
           
           {step === 1 && (
             <>
@@ -223,71 +223,80 @@ export default function Register({ onBackToLogin }: Props) {
                 <label className="block text-sm font-medium mb-1 text-white/90">Email</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="email@empresa.com" required />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-white/90">Senha</label>
-                <div className="relative">
-                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="Mínimo 6 caracteres" required />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                {password && (
-                  <div className="space-y-0.5 text-xs mt-1.5">
-                    <p className={strength.hasMinLength ? 'text-green-400' : 'text-red-400'}>
-                      {strength.hasMinLength ? '✓' : '✗'} Mínimo 6 caracteres
-                    </p>
-                    <p className={strength.hasLetter ? 'text-green-400' : 'text-red-400'}>
-                      {strength.hasLetter ? '✓' : '✗'} Contém letras
-                    </p>
-                    <p className={strength.hasNumber ? 'text-green-400' : 'text-red-400'}>
-                      {strength.hasNumber ? '✓' : '✗'} Contém números
-                    </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-white/90">Senha</label>
+                  <div className="relative">
+                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="Senha" required />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
-                )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-white/90">Confirmar senha</label>
+                  <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Repita" required />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-white/90">Confirmar senha</label>
-                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Repita a senha" required />
-              </div>
+              {password && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] mt-0.5">
+                  <p className={strength.hasMinLength ? 'text-green-400' : 'text-red-400'}>
+                    {strength.hasMinLength ? '✓' : '✗'} 6+ chars
+                  </p>
+                  <p className={strength.hasLetter ? 'text-green-400' : 'text-red-400'}>
+                    {strength.hasLetter ? '✓' : '✗'} Letras
+                  </p>
+                  <p className={strength.hasNumber ? 'text-green-400' : 'text-red-400'}>
+                    {strength.hasNumber ? '✓' : '✗'} Números
+                  </p>
+                </div>
+              )}
             </>
           )}
 
           {step === 2 && (
             <>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-white/90">País</label>
-                <select value={country} onChange={(e) => { setCountry(e.target.value as 'BR' | 'PY'); setDocument(''); setPhone(''); }} className={selectClass}>
-                  <option value="BR">🇧🇷 Brasil</option>
-                  <option value="PY">🇵🇾 Paraguay</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-white/90">Tipo de conta</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => { setAccountType('pessoal'); setDocument(''); }}
-                    className={`py-2.5 rounded-lg text-sm font-medium border transition-colors ${accountType === 'pessoal' ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/15'}`}>
-                    Uso Pessoal
-                  </button>
-                  <button type="button" onClick={() => { setAccountType('empresa'); setDocument(''); }}
-                    className={`py-2.5 rounded-lg text-sm font-medium border transition-colors ${accountType === 'empresa' ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/15'}`}>
-                    Empresa
-                  </button>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-white/90">País</label>
+                  <select value={country} onChange={(e) => { setCountry(e.target.value as 'BR' | 'PY'); setDocument(''); setPhone(''); }} className={selectClass}>
+                    <option value="BR">🇧🇷 Brasil</option>
+                    <option value="PY">🇵🇾 Paraguay</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-white/90">Tipo</label>
+                  <div className="grid grid-cols-2 gap-1 bg-white/10 p-1 rounded-lg border border-white/10">
+                    <button type="button" onClick={() => { setAccountType('pessoal'); setDocument(''); }}
+                      className={`py-1.5 rounded-md text-[10px] font-bold transition-all ${accountType === 'pessoal' ? 'bg-secondary text-secondary-foreground' : 'text-white/40 hover:text-white'}`}>
+                      PESSOAL
+                    </button>
+                    <button type="button" onClick={() => { setAccountType('empresa'); setDocument(''); }}
+                      className={`py-1.5 rounded-md text-[10px] font-bold transition-all ${accountType === 'empresa' ? 'bg-secondary text-secondary-foreground' : 'text-white/40 hover:text-white'}`}>
+                      EMPRESA
+                    </button>
+                  </div>
                 </div>
               </div>
+
               {accountType === 'empresa' && (
                 <div>
                   <label className="block text-sm font-medium mb-1 text-white/90">Nome da empresa</label>
-                  <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={inputClass} placeholder="Nome da empresa" required />
+                  <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={inputClass} placeholder="Nome Fantasia" required />
                 </div>
               )}
-              <div>
-                <label className="block text-sm font-medium mb-1 text-white/90">{getDocumentLabel()}</label>
-                <input type="text" value={document} onChange={(e) => setDocument(applyDocumentMask(e.target.value, country, accountType))} className={inputClass} placeholder={getDocumentPlaceholder()} required />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-white/90">{getDocumentLabel()}</label>
+                  <input type="text" value={document} onChange={(e) => setDocument(applyDocumentMask(e.target.value, country, accountType))} className={inputClass} placeholder={getDocumentPlaceholder()} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-white/90">Telefone</label>
+                  <input type="tel" value={phone} onChange={(e) => setPhone(applyPhoneMask(e.target.value, country))} className={inputClass} placeholder={getPhonePlaceholder()} required />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-white/90">Telefone</label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(applyPhoneMask(e.target.value, country))} className={inputClass} placeholder={getPhonePlaceholder()} required />
-              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-white/90">Escolha seu plano <span className="text-green-400 text-xs font-normal">(7 dias grátis!)</span></label>
@@ -315,32 +324,32 @@ export default function Register({ onBackToLogin }: Props) {
                         type="button"
                         key={p.id}
                         onClick={() => setPlanId(p.id)}
-                        className={`w-full rounded-xl p-3 border-2 text-left transition-all relative overflow-hidden ${
+                        className={`w-full rounded-xl p-4 border-2 text-left transition-all relative overflow-hidden ${
                           isSelected
                             ? 'border-secondary bg-secondary/10'
                             : 'border-white/15 bg-white/5 hover:border-white/30 hover:bg-white/10'
                         }`}
                       >
                         {isPro && (
-                          <span className="absolute top-2 right-2 text-[10px] font-bold bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <span className="absolute top-0 right-0 text-[9px] font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded-bl-lg flex items-center gap-1">
                             <Star size={9} fill="currentColor" /> POPULAR
                           </span>
                         )}
-                        <div className="flex items-center gap-2">
-                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        <div className="flex items-start gap-3">
+                          <div className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center flex-shrink-0 ${
                             isSelected ? 'border-secondary' : 'border-white/30'
                           }`}>
-                            {isSelected && <div className="w-2 h-2 rounded-full bg-secondary" />}
+                            {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-secondary" />}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-sm font-semibold">{p.name}</p>
-                            {p.features && <p className="text-white/50 text-[10px] truncate">{p.features}</p>}
+                          <div className="flex-1 min-w-0 pr-16">
+                            <p className="text-white text-sm font-bold uppercase tracking-tight">{p.name}</p>
+                            {p.features && <p className="text-white/50 text-[10px] sm:text-xs mt-0.5 line-clamp-1">{p.features}</p>}
                           </div>
-                          <div className="text-right">
-                            <p className="text-secondary font-bold text-sm">
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-secondary font-black text-sm sm:text-base leading-tight">
                               {p.currency === 'PYG' ? '₲' : 'R$'} {billingCycle === 'anual' ? (p.annualPrice || Math.round(p.price * 10)).toLocaleString() : p.price.toLocaleString()}
                             </p>
-                            <p className="text-white/40 text-[9px]">/{billingCycle === 'anual' ? 'ano' : 'mês'} após trial</p>
+                            <p className="text-white/40 text-[9px] uppercase font-medium tracking-wider">/{billingCycle === 'anual' ? 'ano' : 'mês'}</p>
                           </div>
                         </div>
                       </button>
