@@ -327,7 +327,31 @@ export default function MeuPlano() {
         } else if (error) {
           // Explicitly handle 402 status returned by the Edge Function (rejected payment)
           if (error.status === 402) {
-             setCardError('Pagamento recusado: Verifique os dados do cartão, validade ou limite disponível.');
+             let errorMessage = 'Pagamento recusado: Verifique os dados do cartão, validade ou limite disponível.';
+             
+             // Try to find the exact reason returned by Mercado Pago
+             try {
+               // In recent supabase-js versions, the response body might be in error
+               // or we can try to parse it if it's available. 
+               // Based on mp-subscribe, it returns { error: "reason" }
+               // @ts-ignore
+               const potentialReason = error.message || '';
+               if (potentialReason.includes('cc_rejected_insufficient_amount')) {
+                 errorMessage = 'Pagamento recusado: Saldo insuficiente no cartão.';
+               } else if (potentialReason.includes('cc_rejected_high_risk')) {
+                 errorMessage = 'Pagamento recusado: Rejeitado por segurança. Tente outro cartão ou entre em contato com seu banco.';
+               } else if (potentialReason.includes('cc_rejected_bad_filled')) {
+                 errorMessage = 'Pagamento recusado: Dados do cartão incorretos (número, validade ou CVV).';
+               } else if (potentialReason.includes('call_for_authorize')) {
+                 errorMessage = 'Pagamento recusado: Necessário autorizar com o banco emissor.';
+               } else if (potentialReason.includes('card_not_active')) {
+                 errorMessage = 'Pagamento recusado: O cartão não está ativo.';
+               }
+             } catch (e) {
+               console.error('Error parsing payment error details:', e);
+             }
+
+             setCardError(errorMessage);
              setSubmitting(false);
              return;
           }
