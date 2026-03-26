@@ -148,9 +148,16 @@ serve(async (req: Request) => {
       token: tokenId,
       description: `Assinatura ${planName || 'Veltor Finance'}`,
       installments: 1,
-      payment_method_id: paymentMethodId || 'visa', // e.g., 'visa', 'master', 'elo', 'amex'
+      payment_method_id: paymentMethodId || 'visa',
+      binary_mode: true, // Immediate aprobado/rechazado
       payer: {
-        email: payerEmail || 'pagador@email.com',
+        email: payerEmail || customerData?.email || 'pagador@email.com',
+        first_name: customerData?.name?.split(' ')[0] || 'Cliente',
+        last_name: customerData?.name?.split(' ').slice(1).join(' ') || 'User',
+        identification: {
+          type: 'CPF', // Standard for BR Card anti-fraud
+          number: customerData?.document?.replace(/\D/g, '') || '19119119100',
+        },
       },
       metadata: {
         company_id: companyId,
@@ -170,6 +177,7 @@ serve(async (req: Request) => {
     });
 
     const mpResult = await mpResponse.json();
+    console.log('[mp-subscribe] MP RESULT:', JSON.stringify(mpResult, null, 2));
 
     if (!mpResponse.ok || mpResult.status === 'rejected') {
       const reason = mpResult?.status_detail || mpResult?.message || 'Pagamento rejeitado pelo Mercado Pago';

@@ -361,6 +361,11 @@ export default function MeuPlano() {
             paymentMethodId: getPaymentMethodId(cardForm.cardNumber),
             payerEmail: planInfo?.userEmail || '',
             isAnnual,
+            customerData: {
+              email: planInfo?.userEmail || '',
+              name: cardForm.cardName,
+              document: cardForm.cpfCnpj.replace(/\D/g, ''),
+            }
           },
         });
 
