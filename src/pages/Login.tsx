@@ -201,6 +201,16 @@ export default function Login() {
             </button>
           </div>
         )}
+
+        {/* Footer */}
+        <div className="mt-8 text-center space-y-1 opacity-60">
+          <p className="text-white text-[10px] sm:text-xs">
+            © 2026 Velrix Finance. Todos os direitos reservados.
+          </p>
+          <p className="text-secondary text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+            Desenvolvido por COUTEC DIGITAL - JOÃO COUTO
+          </p>
+        </div>
       </div>
     </div>
   );

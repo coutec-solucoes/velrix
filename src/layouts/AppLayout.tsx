@@ -311,7 +311,19 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-6 animate-fade-in">{children}</main>
+        <main className="flex-1 p-4 lg:p-6 animate-fade-in flex flex-col">
+          <div className="flex-1">
+            {children}
+          </div>
+          <footer className="mt-8 pt-8 pb-4 text-center space-y-1 opacity-30 border-t border-border/20">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              © 2026 Velrix Finance. Todos os direitos reservados.
+            </p>
+            <p className="text-secondary text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+              Desenvolvido por COUTEC DIGITAL - JOÃO COUTO
+            </p>
+          </footer>
+        </main>
       </div>
     </div>
   );
