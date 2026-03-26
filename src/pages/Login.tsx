@@ -12,7 +12,7 @@ type LoginTab = 'owner' | 'collaborator';
 
 
 
-export default function Login() {
+export default function Login({ initialShowRegister = false }: { initialShowRegister?: boolean }) {
   const [tab, setTab] = useState<LoginTab>('owner');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -21,18 +21,11 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
+  const [showRegister, setShowRegister] = useState(initialShowRegister);
   const [showForgot, setShowForgot] = useState(false);
   const { login, loginCollaborator } = useAuth();
   const { t } = useTranslation();
 
-  useEffect(() => {
-    // Open register if path is /register
-    const path = window.location.pathname;
-    if (path === '/register') {
-      setShowRegister(true);
-    }
-  }, []);
 
   const handleOwnerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

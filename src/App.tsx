@@ -108,6 +108,7 @@ const App = () => (
                       <Route path="users" element={<AdminUsers />} />
                       <Route path="settings" element={<AdminSettings />} />
                     </Route>
+                    <Route path="/register" element={<Login initialShowRegister={true} />} />
                     <Route path="/*" element={<AppRoutes />} />
                   </Routes>
                 </Suspense>

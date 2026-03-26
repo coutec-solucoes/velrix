@@ -261,7 +261,7 @@ export default function MeuPlano() {
 
       // @ts-ignore
       const mpInstance = new window.MercadoPago(mpKey, {
-        locale: planInfo?.country === 'BR' ? 'pt-BR' : 'es-PY',
+        locale: planInfo?.country === 'BR' ? 'pt-BR' : 'es-AR',
       });
 
       const [expirationMonth, expirationYear] = cardForm.expiry.split('/');
@@ -305,6 +305,13 @@ export default function MeuPlano() {
         if (!error && data?.success) {
           activationSuccess = true;
         } else if (error) {
+          // Explicitly handle 402 status returned by the Edge Function (rejected payment)
+          if (error.status === 402) {
+             setCardError('Pagamento recusado: Verifique os dados do cartão, validade ou limite disponível.');
+             setSubmitting(false);
+             return;
+          }
+
           // If it's NOT a network/CORS issue, surface the real error
           const isNetworkError =
             error.message?.toLowerCase().includes('failed to fetch') ||
