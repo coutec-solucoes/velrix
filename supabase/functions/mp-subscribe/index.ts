@@ -21,7 +21,7 @@ serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { action, paymentId, companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual, customerData, deviceId } = body;
+    const { action, paymentId, companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual, customerData, deviceId, installments } = body;
 
     // Single initialization for entire function
     const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
@@ -143,14 +143,15 @@ serve(async (req: Request) => {
 
 
 
+
     // ── 1. Create payment at Mercado Pago (Enriched) ──────────────────────────
     const mpPayload = {
       transaction_amount: Number(price),
       token: tokenId,
       description: `Assinatura ${planName || 'Veltor Finance'}`,
-      installments: 1,
+      installments: Number(installments) || 1,
       payment_method_id: paymentMethodId || 'visa',
-      binary_mode: true, // Immediate aprobado/rechazado
+      binary_mode: false, // Set to false to allow MP's deeper anti-fraud analysis if needed
       payer: {
         email: payerEmail || customerData?.email || 'pagador@email.com',
         first_name: customerData?.name?.split(' ')[0] || 'Cliente',
@@ -165,8 +166,10 @@ serve(async (req: Request) => {
       additional_info: {
         items: [
           {
-            id: planName || 'plan',
+            id: planName?.toLowerCase().replace(/\s+/g, '_') || 'plan_premium',
             title: `Assinatura ${planName || 'Veltor Finance'}`,
+            description: `Acesso completo ao sistema financeiro - Plano ${planName || 'Padrão'}`,
+            category_id: "services",
             quantity: 1,
             unit_price: Number(price),
           }

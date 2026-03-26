@@ -59,6 +59,7 @@ export default function MeuPlano() {
   const [cardError, setCardError] = useState('');
   const [cardSuccess, setCardSuccess] = useState(false);
   const [deviceId, setDeviceId] = useState('');
+  const [installments, setInstallments] = useState('1');
 
   // ── Capture Device ID (Anti-fraud) ──
   useEffect(() => {
@@ -384,6 +385,7 @@ export default function MeuPlano() {
             payerEmail: planInfo?.userEmail || '',
             isAnnual,
             deviceId,
+            installments: Number(installments),
             customerData: {
               email: planInfo?.userEmail || '',
               name: cardForm.cardName,
@@ -883,8 +885,26 @@ export default function MeuPlano() {
                     />
                   </div>
 
+                  {isAnnual && (
+                    <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                      <label className="block text-body-sm font-medium mb-1">Parcelamento</label>
+                      <select
+                        value={installments}
+                        onChange={(e) => setInstallments(e.target.value)}
+                        className="w-full border border-border rounded-lg px-3 py-2.5 text-body-sm bg-background focus:ring-2 focus:ring-secondary outline-none appearance-none cursor-pointer"
+                      >
+                        <option value="1">1x de {currencySymbol} {activePrice.toLocaleString()}</option>
+                        <option value="2">2x de {currencySymbol} {(activePrice / 2).toFixed(2).replace('.', ',')}</option>
+                        <option value="3">3x de {currencySymbol} {(activePrice / 3).toFixed(2).replace('.', ',')}</option>
+                      </select>
+                      <p className="text-[10px] text-amber-500 mt-1 px-1 font-medium">
+                        💡 Dica: Dividir em 2x costuma ter maior taxa de aprovação.
+                      </p>
+                    </div>
+                  )}
+
                   {cardError && (
-                    <p className="text-sm text-red-400 flex items-center gap-1.5">
+                    <p className="text-sm text-red-400 flex items-center gap-1.5 bg-red-400/10 p-2 rounded-md border border-red-400/20">
                       <AlertTriangle size={14} /> {cardError}
                     </p>
                   )}
@@ -892,18 +912,21 @@ export default function MeuPlano() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all hover:opacity-90 disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold transition-all hover:scale-[1.01] hover:shadow-lg disabled:opacity-50 disabled:scale-100"
                     style={{ background: 'linear-gradient(135deg, #009ee3 0%, #00c4d8 100%)', color: '#fff' }}
                   >
-                    {submitting ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                    {submitting ? <Loader2 size={18} className="animate-spin" /> : <CreditCard size={18} />}
                     {submitting
                       ? 'Processando...'
-                      : `Ativar — ${currencySymbol} ${activePrice.toLocaleString()}/${isAnnual ? 'ano' : 'mês'}`}
+                      : `Ativar agora — ${currencySymbol} ${activePrice.toLocaleString()}`}
                   </button>
 
-                  <div className="flex items-center justify-center gap-2 text-muted-foreground text-xs">
-                    <Shield size={13} />
-                    <span>Pagamento seguro via Mercado Pago · Cancelamento a qualquer momento</span>
+                  <div className="bg-muted/30 p-3 rounded-lg flex flex-col items-center justify-center gap-1.5 text-[11px] text-muted-foreground border border-border/50">
+                    <div className="flex items-center gap-2">
+                      <Shield size={14} className="text-secondary" />
+                      <span className="font-semibold text-foreground/80 lowercase">🔒 ambiente criptografado</span>
+                    </div>
+                    <span>Pagamento processado com segurança por <strong>Mercado Pago</strong></span>
                   </div>
                 </form>
               </div>
