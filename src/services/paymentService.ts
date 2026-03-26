@@ -99,53 +99,43 @@ function buildPixEMV(
 }
 
 async function initiatePixPayment(data: PaymentInitiation, settings: AdminSettings): Promise<PaymentResponse> {
-  // If Mercado Pago is configured, use it for automated PIX
-  if (settings.mpPublicKey && settings.mpSecretKey) {
-    try {
-      const response = await fetch('https://api.mercadopago.com/v1/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.mpSecretKey}`,
-          'X-Idempotency-Key': `pix-${Date.now()}`,
-        },
-        body: JSON.stringify({
-          transaction_amount: data.amount,
-          description: data.description,
-          payment_method_id: 'pix',
-          payer: {
+  // Try to use Dynamic PIX via Edge Function (Secure & bypasses CORS)
+  try {
+    const { getSupabase } = await import('@/lib/supabase');
+    const supabase = getSupabase();
+    
+    if (supabase) {
+      const { data: mpData, error } = await supabase.functions.invoke('mp-subscribe', {
+        body: {
+          action: 'create_pix',
+          companyId: data.companyId,
+          planName: data.description,
+          price: data.amount,
+          isAnnual: data.isAnnual,
+          payerEmail: data.customer.email,
+          customerData: {
             email: data.customer.email,
-            first_name: data.customer.name.split(' ')[0],
-            last_name: data.customer.name.split(' ').slice(1).join(' ') || 'User',
-            identification: {
-              type: data.customer.document.length > 11 ? 'CNPJ' : 'CPF',
-              number: data.customer.document.replace(/\D/g, ''),
-            },
-          },
-          metadata: {
-            customer_email: data.customer.email,
-            description: data.description,
-            company_id: data.companyId,
-            is_annual: data.isAnnual
+            name: data.customer.name,
+            document: data.customer.document,
           }
-        }),
+        }
       });
 
-      const mpData = await response.json();
-
-      if (response.ok && mpData.point_of_interaction?.transaction_data) {
+      if (!error && mpData?.success) {
         return {
           success: true,
-          pixCode: mpData.point_of_interaction.transaction_data.qr_code,
-          pixQrCode: `data:image/png;base64,${mpData.point_of_interaction.transaction_data.qr_code_base64}`,
-          externalId: String(mpData.id),
+          pixCode: mpData.pixCode,
+          pixQrCode: mpData.pixQrCode,
+          externalId: String(mpData.payment_id),
         };
-      } else {
-        console.warn('[PaymentService] MP PIX failed, falling back to static:', mpData);
       }
-    } catch (err) {
-      console.error('[PaymentService] Error initiating MP PIX:', err);
+      
+      if (error) {
+        console.warn('[PaymentService] Edge Function PIX failed:', error);
+      }
     }
+  } catch (err) {
+    console.warn('[PaymentService] Error invoking PIX function:', err);
   }
 
   // Fallback to Static PIX (requires manual confirmation)

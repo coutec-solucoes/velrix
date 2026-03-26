@@ -16,12 +16,69 @@ const corsHeaders = {
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
     const body = await req.json();
-    const { action, paymentId, companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual } = body;
+    const { action, paymentId, companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual, customerData } = body;
+
+    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    const { data: settingsData } = await supabase.from('admin_settings').select('value').eq('key', 'mpSecretKey').single();
+    const mpAccessToken = settingsData?.value || Deno.env.get('MP_ACCESS_TOKEN');
+
+    if (!mpAccessToken) {
+      return new Response(JSON.stringify({ error: 'MP Access Token não configurado' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ── ACTION: create_pix (New) ─────────────────────────────────────────────
+    if (action === 'create_pix' || (action === 'pix' && !tokenId)) {
+      const mpPayload = {
+        transaction_amount: Number(price),
+        description: planName || 'Assinatura Veltor Finance',
+        payment_method_id: 'pix',
+        payer: {
+          email: payerEmail || customerData?.email || 'pagador@email.com',
+          first_name: customerData?.name?.split(' ')[0] || 'Cliente',
+          last_name: customerData?.name?.split(' ').slice(1).join(' ') || 'User',
+          identification: {
+            type: customerData?.document?.length > 11 ? 'CNPJ' : 'CPF',
+            number: customerData?.document?.replace(/\D/g, '') || '',
+          },
+        },
+        metadata: {
+          company_id: companyId,
+          plan_name: planName,
+          is_annual: isAnnual,
+        },
+      };
+
+      const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${mpAccessToken}`,
+          'X-Idempotency-Key': `pix-${companyId}-${Date.now()}`,
+        },
+        body: JSON.stringify(mpPayload),
+      });
+
+      const mpData = await mpResponse.json();
+
+      if (!mpResponse.ok) {
+        return new Response(JSON.stringify({ error: mpData.message || 'Erro ao gerar PIX no Mercado Pago' }), { 
+          status: mpResponse.status, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        payment_id: mpData.id,
+        pixCode: mpData.point_of_interaction.transaction_data.qr_code,
+        pixQrCode: `data:image/png;base64,${mpData.point_of_interaction.transaction_data.qr_code_base64}`,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // ── PIX Verification Logic (New) ─────────────────────────────────────────
     if (action === 'check' || paymentId) {
