@@ -657,33 +657,36 @@ async function doPullFromSupabase(): Promise<boolean> {
     // Map tables that need secure views for reading (password columns revoked)
     const readSource: Record<string, string> = { users: 'users_secure' };
 
-    // Pull tables in parallel for much better performance
+    // Pull tables in parallel and collect results to avoid race conditions in cache updates
     const tableEntries = Object.entries(tableMap);
-    await Promise.all(tableEntries.map(async ([localKey, table]) => {
+    const pullResults = await Promise.all(tableEntries.map(async ([localKey, table]) => {
       const source = readSource[table] || table;
       let query: any = supabase.from(source).select('*');
       query = table === 'companies' ? query.eq('id', companyId) : query.eq('company_id', companyId);
       
       const { data: rows, error } = await query;
-      if (!error && rows) {
-        // Merge by ID: keep local-only items that haven't replicated yet
-        const pulledItems = rows.map((r: any) => toCamelCase(r));
-        const pulledIds = new Set(pulledItems.map((i: any) => i.id));
-        
-        // Read CURRENT live cache for merge
-        const currentItems: any[] = (getAppData() as any)[localKey] || [];
-        const localOnlyItems = currentItems.filter((i: any) => !pulledIds.has(i.id));
-        const mergedCollection = [...pulledItems, ...localOnlyItems];
-        
-        // Update cache
-        const freshData = { ...getAppData(), [localKey]: mergedCollection };
-        updateCache(freshData);
-        notifyListeners(table);
-        console.log(`[Supabase] ✅ Pull ${source}: ${rows.length} rows`);
-      } else if (error) {
+      if (error) {
         console.warn(`[Supabase] ⚠️ Pull ${source} failed:`, error.message);
+        return { localKey, items: null };
       }
+      return { localKey, items: rows ? rows.map((r: any) => toCamelCase(r)) : [] };
     }));
+
+    const freshData = { ...getAppData() };
+    pullResults.forEach(({ localKey, items }) => {
+      if (items) {
+        // Merge by ID: keep local-only items that haven't replicated yet
+        const pulledIds = new Set(items.map((i: any) => i.id));
+        const currentItems: any[] = (freshData as any)[localKey] || [];
+        const localOnlyItems = currentItems.filter((i: any) => !pulledIds.has(i.id));
+        (freshData as any)[localKey] = [...items, ...localOnlyItems];
+      }
+    });
+
+    updateCache(freshData);
+    pullResults.forEach(({ localKey, items }) => {
+      if (items) notifyListeners(tableMap[localKey] || localKey);
+    });
 
     // Pull company settings and history in parallel
     const [compRes, saasCompRes, histRes, appSetRes] = await Promise.all([

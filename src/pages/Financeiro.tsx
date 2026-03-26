@@ -249,6 +249,7 @@ export default function Financeiro() {
   const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(monthEnd());
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterClient, setFilterClient] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;

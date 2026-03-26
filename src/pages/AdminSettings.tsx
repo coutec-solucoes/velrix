@@ -772,7 +772,7 @@ CREATE POLICY "Admin can manage settings"
         <div className="space-y-4 max-w-3xl">
           <div className="flex items-center justify-between">
             <p className="text-white/70 text-sm flex items-center gap-2"><CreditCard size={16} className="text-secondary" /> Planos Disponíveis</p>
-            <button onClick={() => { setShowPlanForm(true); setEditPlanId(null); setPlanForm({ name: '', price: '', currency: 'BRL', features: '' }); }}
+            <button onClick={() => { setShowPlanForm(true); setEditPlanId(null); setPlanForm({ name: '', price: '', annualPrice: '', currency: 'BRL', features: '' }); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:opacity-90 transition-opacity"><Plus size={14} /> Novo Plano</button>
           </div>
 
