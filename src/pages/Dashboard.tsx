@@ -7,6 +7,7 @@ import { useTranslation } from '@/hooks/useI18n';
 import { LayoutGrid, Columns, Rows3, Calendar } from 'lucide-react';
 import CurrencySummarySection from '@/components/dashboard/CurrencySummarySection';
 import ConsolidatedSummary from '@/components/dashboard/ConsolidatedSummary';
+import TrialBanner from '@/components/TrialBanner';
 
 type PeriodFilter = 'month' | 'quarter' | 'year' | 'all';
 
@@ -111,6 +112,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <TrialBanner />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-title-lg">{t('dash_title')}</h1>
         <div className="flex items-center gap-2">

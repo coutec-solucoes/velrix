@@ -27,9 +27,10 @@ export default function Login() {
   const { t } = useTranslation();
 
   useEffect(() => {
+    // Open register if path is /register
     const path = window.location.pathname;
-    if (path === '/register' || path === '/checkout') {
-      window.location.href = 'https://velrixcontrolfinace.vercel.app/';
+    if (path === '/register') {
+      setShowRegister(true);
     }
   }, []);
 
@@ -184,12 +185,21 @@ export default function Login() {
         )}
 
         {tab === 'owner' && (
-          <a
-            href="https://velrixcontrolfinace.vercel.app/"
-            className="mt-4 text-sm text-white/60 hover:text-white transition-colors text-center block"
-          >
-            Não tem conta? <span className="text-secondary font-medium">Criar conta</span>
-          </a>
+          <div className="mt-5 flex flex-col items-center gap-2">
+            <p className="text-white/50 text-xs">Não tem conta?</p>
+            <button
+              type="button"
+              onClick={() => setShowRegister(true)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-base font-bold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+              style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #0ea5e9 100%)',
+                color: '#fff',
+                letterSpacing: '0.01em',
+              }}
+            >
+              🚀 Criar conta — 7 dias grátis
+            </button>
+          </div>
         )}
       </div>
     </div>

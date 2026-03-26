@@ -1,14 +1,11 @@
-import { useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { Eye, EyeOff, UserPlus, ArrowLeft, Loader2, CreditCard } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Eye, EyeOff, ArrowLeft, Loader2, CheckCircle2, Star } from 'lucide-react';
 import veltorBg from '@/assets/veltor-bg.png';
 import veltorLogo from '@/assets/veltor-logo.png';
 import { applyDocumentMask, applyPhoneMask } from '@/utils/masks';
 import { fetchPlans } from '@/services/adminSupabaseService';
 import { SaasPlan } from '@/types/admin';
-import { useEffect } from 'react';
-import { PaymentResponse } from '@/services/paymentService';
-import { setupAccountFlow } from '@/services/registrationService';
+import { registerAccount } from '@/services/registrationService';
 
 interface Props {
   onBackToLogin: () => void;
@@ -31,42 +28,23 @@ export default function Register({ onBackToLogin }: Props) {
   const [success, setSuccess] = useState(false);
   const [plans, setPlans] = useState<SaasPlan[]>([]);
   const [planId, setPlanId] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'pagopar' | 'bancard'>('pix');
-  const [paymentData, setPaymentData] = useState<PaymentResponse | null>(null);
-  const [isTrial, setIsTrial] = useState(false);
 
   useEffect(() => {
     fetchPlans().then((fetchedPlans) => {
       setPlans(fetchedPlans);
-      
-      // Parse external URL parameters for marketing/sales page integration
       const params = new URLSearchParams(window.location.search);
       const urlCountry = params.get('country');
-      if (urlCountry === 'BR' || urlCountry === 'PY') {
-        setCountry(urlCountry);
-      }
-      
+      if (urlCountry === 'BR' || urlCountry === 'PY') setCountry(urlCountry);
       const urlType = params.get('type');
-      if (urlType === 'empresa' || urlType === 'pessoal') {
-        setAccountType(urlType);
-      }
-      
+      if (urlType === 'empresa' || urlType === 'pessoal') setAccountType(urlType);
       const urlPlanId = params.get('planId');
-      if (urlPlanId && fetchedPlans.some(p => p.id === urlPlanId)) {
-        setPlanId(urlPlanId);
-      }
-      
-      const urlTrial = params.get('trial');
-      if (urlTrial === 'true') {
-        setIsTrial(true);
-      }
+      if (urlPlanId && fetchedPlans.some(p => p.id === urlPlanId)) setPlanId(urlPlanId);
     });
   }, []);
 
   useEffect(() => {
-    if (country === 'BR') setPaymentMethod('pix');
-    else setPaymentMethod('pagopar');
-    setPaymentData(null);
+    // Reset plan selection when country changes
+    setPlanId('');
   }, [country]);
 
   const filteredPlans = plans.filter(p => {
@@ -117,43 +95,34 @@ export default function Register({ onBackToLogin }: Props) {
       setError('Informe o nome da empresa.');
       return;
     }
-    setStep(3);
+    handleSubmitTrial();
   };
 
   const selectedPlan = plans.find(p => p.id === planId);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSubmitTrial = async () => {
     setError('');
-
     setLoading(true);
     try {
-      const result = await setupAccountFlow({
-        registrationData: {
-          name,
-          email,
-          password,
-          country,
-          accountType,
-          companyName: accountType === 'empresa' ? companyName : undefined,
-          document,
-          phone,
-          planId: planId || undefined,
-        },
-        paymentData,
-        selectedPlanPrice: selectedPlan?.price || 0,
-        selectedPlanCurrency: selectedPlan?.currency || 'BRL',
-        selectedPlanName: selectedPlan?.name || '',
-        isTrial,
-      });
+      const err = await registerAccount({
+        name,
+        email,
+        password,
+        country,
+        accountType,
+        companyName: accountType === 'empresa' ? companyName : undefined,
+        document,
+        phone,
+        planId: planId || undefined,
+      }, true); // isTrial = true always
 
-      if (result.error) {
-        setError(result.error);
-      } else if (result.redirectUrl) {
-        window.location.href = result.redirectUrl;
-      } else if (result.paymentData) {
-        setPaymentData(result.paymentData);
-      } else if (result.success) {
+      if (err === 'register_email_exists') {
+        setError('Este email já está cadastrado.');
+      } else if (err === 'supabase_not_configured') {
+        setError('Banco de dados não configurado.');
+      } else if (err) {
+        setError(err);
+      } else {
         setSuccess(true);
       }
     } catch {
@@ -161,6 +130,12 @@ export default function Register({ onBackToLogin }: Props) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (step === 1) handleNext();
+    else if (step === 2) handleNextStep2();
   };
 
   const getDocumentLabel = () => {
@@ -220,16 +195,21 @@ export default function Register({ onBackToLogin }: Props) {
           className="w-3/4 max-w-[200px] h-auto drop-shadow-lg mb-4"
         />
 
-        <p className="text-white/70 text-xs tracking-wide mb-5">
-          Crie sua conta
-        </p>
+        {/* Steps indicator */}
+        <div className="flex items-center gap-2 mb-5">
+          {[1, 2].map((s) => (
+            <div key={s} className="flex items-center gap-2">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                s < step ? 'bg-green-500 text-white' : s === step ? 'bg-secondary text-secondary-foreground' : 'bg-white/10 text-white/40'
+              }`}>
+                {s < step ? '✓' : s}
+              </div>
+              {s < 2 && <div className={`w-8 h-0.5 ${s < step ? 'bg-green-500' : 'bg-white/20'}`} />}
+            </div>
+          ))}
+        </div>
 
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          if (step === 1) handleNext();
-          else if (step === 2) handleNextStep2();
-          else handleSubmit(e);
-        }} className="w-full bg-black/40 backdrop-blur-md rounded-xl border border-white/10 p-5 space-y-3.5 shadow-2xl">
+        <form onSubmit={handleSubmit} className="w-full bg-black/40 backdrop-blur-md rounded-xl border border-white/10 p-5 space-y-3.5 shadow-2xl">
           
           {step === 1 && (
             <>
@@ -307,99 +287,60 @@ export default function Register({ onBackToLogin }: Props) {
                 <input type="tel" value={phone} onChange={(e) => setPhone(applyPhoneMask(e.target.value, country))} className={inputClass} placeholder={getPhonePlaceholder()} required />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-white/90">Plano mensal</label>
-                <select value={planId} onChange={(e) => setPlanId(e.target.value)} className={selectClass} required>
-                  <option value="">Selecione um plano</option>
-                  {filteredPlans.length === 0 ? (
-                    <option value="" disabled>{plans.length === 0 ? 'Carregando planos...' : 'Nenhum plano para este país'}</option>
-                  ) : (
-                    filteredPlans.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.currency === 'PYG' ? '₲' : 'R$'} {p.price.toLocaleString()})</option>
-                    ))
-                  )}
-                </select>
-                {filteredPlans.length === 0 && plans.length > 0 && (
-                  <p className="text-[10px] text-white/40 mt-1">Nenhum plano disponível para {country === 'BR' ? 'Brasil' : 'Paraguay'}.</p>
+                <label className="block text-sm font-medium mb-2 text-white/90">Escolha seu plano <span className="text-green-400 text-xs font-normal">(7 dias grátis!)</span></label>
+                {filteredPlans.length === 0 && (
+                  <p className="text-white/40 text-xs">{plans.length === 0 ? 'Carregando planos...' : 'Nenhum plano para este país'}</p>
+                )}
+                <div className="space-y-2">
+                  {filteredPlans.map(p => {
+                    const isSelected = planId === p.id;
+                    const isPro = p.name.toLowerCase().includes('pro');
+                    return (
+                      <button
+                        type="button"
+                        key={p.id}
+                        onClick={() => setPlanId(p.id)}
+                        className={`w-full rounded-xl p-3 border-2 text-left transition-all relative overflow-hidden ${
+                          isSelected
+                            ? 'border-secondary bg-secondary/10'
+                            : 'border-white/15 bg-white/5 hover:border-white/30 hover:bg-white/10'
+                        }`}
+                      >
+                        {isPro && (
+                          <span className="absolute top-2 right-2 text-[10px] font-bold bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Star size={9} fill="currentColor" /> POPULAR
+                          </span>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                            isSelected ? 'border-secondary' : 'border-white/30'
+                          }`}>
+                            {isSelected && <div className="w-2 h-2 rounded-full bg-secondary" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-semibold">{p.name}</p>
+                            {p.features && <p className="text-white/50 text-[10px] truncate">{p.features}</p>}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-secondary font-bold text-sm">{p.currency === 'PYG' ? '₲' : 'R$'} {p.price.toLocaleString()}</p>
+                            <p className="text-white/40 text-[9px]">/mês após trial</p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {planId && (
+                  <div className="mt-2 p-2.5 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-green-400 flex-shrink-0" />
+                    <p className="text-green-300 text-xs">✨ <strong>7 dias grátis</strong> — sem precisar de cartão agora!</p>
+                  </div>
                 )}
               </div>
             </>
           )}
 
-          {step === 3 && (
-            <div className="space-y-4 py-2">
-              {!paymentData ? (
-                <>
-                  <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-2 text-center">
-                    <p className="text-white/60 text-[10px] uppercase tracking-wider">Plano Selecionado</p>
-                    <h3 className="text-white font-semibold text-sm">{selectedPlan?.name}</h3>
-                    <div className="text-secondary font-bold text-xl">
-                      {selectedPlan?.currency === 'PYG' ? '₲' : 'R$'} {selectedPlan?.price.toLocaleString()}
-                    </div>
-                    <p className="text-white/40 text-[10px]">{selectedPlan?.features}</p>
-                  </div>
 
-                  <div className="space-y-3">
-                    {isTrial ? (
-                      <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-3">
-                        <div className="flex-1 text-center">
-                          <p className="text-white text-sm font-medium">Teste Grátis de 7 Dias</p>
-                          <p className="text-white/60 text-xs mt-1">Inicie gora e aproveite todas as funcionalidades do plano sem compromisso inicial.</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-white/80 text-sm font-medium">Forma de Pagamento</p>
-                        {country === 'BR' ? (
-                          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                              <CreditCard size={20} className="text-emerald-400" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-white text-sm font-medium">PIX (Brasil)</p>
-                              <p className="text-white/40 text-[10px]">Ativação imediata após confirmação</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-2">
-                            <button type="button" onClick={() => setPaymentMethod('pagopar')}
-                              className={`py-2.5 rounded-lg text-xs font-medium border transition-colors ${paymentMethod === 'pagopar' ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/15'}`}>
-                              Pagopar
-                            </button>
-                            <button type="button" onClick={() => setPaymentMethod('bancard')}
-                              className={`py-2.5 rounded-lg text-xs font-medium border transition-colors ${paymentMethod === 'bancard' ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/15'}`}>
-                              Bancard
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  <p className="text-white/40 text-[10px] text-center leading-relaxed italic">
-                    {isTrial 
-                      ? 'Ao clicar em "Iniciar teste grátis", sua conta será ativada instantaneamente.' 
-                      : (country === 'BR' ? 'Ao clicar em "Gerar QR Code PIX", um código será gerado para pagamento.' : 'Ao clicar em "Ir para Pagamento", você será redirecionado para o ambiente seguro.')}
-                  </p>
-                </>
-              ) : (
-                <div className="space-y-4 text-center animate-fade-in">
-                  <div className="bg-white rounded-lg p-4 inline-block mx-auto mb-2">
-                    <img src={paymentData.pixQrCode} alt="PIX QR Code" className="w-48 h-48" />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-white font-medium text-sm">Escaneie o QR Code</p>
-                    <p className="text-white/60 text-xs px-4">Após o pagamento, clique no botão abaixo para finalizar seu cadastro.</p>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 rounded-lg p-3 overflow-hidden">
-                    <p className="text-white/40 text-[10px] uppercase mb-1">Código PIX (Copia e Cola)</p>
-                    <p className="text-white text-[10px] font-mono break-all line-clamp-2">{paymentData.pixCode}</p>
-                    <button type="button" onClick={() => navigator.clipboard.writeText(paymentData.pixCode || '')}
-                      className="mt-2 text-secondary text-[10px] font-medium hover:underline">Copiar código</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {error && <p className="text-sm text-red-400 font-medium">{error}</p>}
 
@@ -413,18 +354,14 @@ export default function Register({ onBackToLogin }: Props) {
                 className="flex items-center justify-center gap-1 px-4 py-3 rounded-lg bg-white/10 text-white font-medium hover:bg-white/20 transition-colors">
                 <ArrowLeft size={16} /> Voltar
               </button>
-              <button type="submit" disabled={loading}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
-                {loading ? <Loader2 size={18} className="animate-spin" /> : (
-                  paymentData ? <UserPlus size={18} /> : 
-                  (step === 3 ? (country === 'BR' ? <CreditCard size={18} /> : <ArrowLeft size={18} className="rotate-180" />) : <UserPlus size={18} />)
-                )}
-                {loading ? 'Processando...' : (
-                  paymentData ? 'Confirmar Pagamento e Finalizar' :
-                  (step === 3 
-                    ? (isTrial ? 'Iniciar teste grátis' : (country === 'BR' ? 'Gerar QR Code PIX' : 'Ir para Pagamento')) 
-                    : 'Próximo')
-                )}
+              <button type="submit" disabled={loading || !planId}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-bold text-base transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100"
+                style={{
+                  background: loading || !planId ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #10b981 0%, #0ea5e9 100%)',
+                  color: '#fff',
+                }}>
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                {loading ? 'Criando conta...' : 'Criar conta — 7 dias grátis 🚀'}
               </button>
             </div>
           )}

@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { getAppData, updateSettings, addExchangeRateSnapshot, getExchangeRateHistory } from '@/services/storageService';
 import { AppSettings, Currency, Country, AppLanguage, ExchangeRateSnapshot, LateFeeSettings } from '@/types';
 import { useTranslation } from '@/hooks/useI18n';
-import { Save, Building2, Coins, Globe, CheckCircle2, ArrowRightLeft, ToggleLeft, ToggleRight, History, UserCog, Percent, Upload, Route, X as XIcon, BookOpen } from 'lucide-react';
+import { Save, Building2, Coins, Globe, CheckCircle2, ArrowRightLeft, ToggleLeft, ToggleRight, History, UserCog, Percent, Upload, Route, X as XIcon, BookOpen, CreditCard } from 'lucide-react';
 import SaveButton from '@/components/SaveButton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import Usuarios from '@/pages/Usuarios';
 import ManualTreinamento from '@/components/ManualTreinamento';
+import MeuPlano from '@/components/MeuPlano';
 
 const allCurrencies: { code: Currency; label: string; symbol: string }[] = [
   { code: 'BRL', label: 'Real', symbol: 'R$' },
@@ -200,6 +201,7 @@ export default function Configuracoes() {
         <TabsList className="bg-muted mb-6">
           <TabsTrigger value="geral" className="gap-1.5"><Building2 size={14} />{t('cfg_company_data')}</TabsTrigger>
           <TabsTrigger value="usuarios" className="gap-1.5"><UserCog size={14} />{t('usr_tab')}</TabsTrigger>
+          <TabsTrigger value="meu-plano" className="gap-1.5"><CreditCard size={14} />Meu Plano</TabsTrigger>
           <TabsTrigger value="manual" className="gap-1.5"><BookOpen size={14} />📚 Manual do Sistema</TabsTrigger>
         </TabsList>
 
@@ -631,6 +633,10 @@ export default function Configuracoes() {
 
         <TabsContent value="usuarios">
           <Usuarios />
+        </TabsContent>
+
+        <TabsContent value="meu-plano">
+          <MeuPlano />
         </TabsContent>
 
         <TabsContent value="manual" className="w-full">
