@@ -20,6 +20,7 @@ export interface PaymentResponse {
   paymentUrl?: string;
   pixCode?: string;
   pixQrCode?: string;
+  externalId?: string;
   error?: string;
 }
 
@@ -137,6 +138,7 @@ async function initiatePixPayment(data: PaymentInitiation, settings: AdminSettin
           success: true,
           pixCode: mpData.point_of_interaction.transaction_data.qr_code,
           pixQrCode: `data:image/png;base64,${mpData.point_of_interaction.transaction_data.qr_code_base64}`,
+          externalId: String(mpData.id),
         };
       } else {
         console.warn('[PaymentService] MP PIX failed, falling back to static:', mpData);
@@ -226,6 +228,28 @@ export async function checkPaymentStatus(companyId: string): Promise<{ paid: boo
 
     return { paid: Boolean(data && data.length > 0) };
   } catch (err: any) {
+    return { paid: false, error: err.message };
+  }
+}
+
+/**
+ * Calls the mp-check Edge Function to verify payment status directly with Mercado Pago.
+ * This is a fallback/force-check that also updates the DB if paid.
+ */
+export async function checkExternalPaymentStatus(paymentId: string, companyId: string): Promise<{ paid: boolean; status?: string; error?: string }> {
+  try {
+    const { getSupabase } = await import('@/lib/supabase');
+    const supabase = getSupabase();
+    if (!supabase) return { paid: false, error: 'Supabase not configured' };
+
+    const { data, error } = await supabase.functions.invoke('mp-check', {
+      body: { paymentId, companyId },
+    });
+
+    if (error) throw error;
+    return { paid: Boolean(data?.paid), status: data?.status };
+  } catch (err: any) {
+    console.error('External verify error:', err);
     return { paid: false, error: err.message };
   }
 }

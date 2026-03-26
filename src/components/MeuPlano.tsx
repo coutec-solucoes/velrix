@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { CreditCard, Shield, CheckCircle2, Loader2, AlertTriangle, RefreshCw, Star, Copy, Smartphone, ToggleLeft, ToggleRight, BadgePercent } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { fetchAdminSettings } from '@/services/adminSupabaseService';
-import { initiatePayment, checkPaymentStatus } from '@/services/paymentService';
+import { initiatePayment, checkPaymentStatus, checkExternalPaymentStatus } from '@/services/paymentService';
 
 interface PlanInfo {
   name: string;
@@ -41,7 +41,7 @@ export default function MeuPlano() {
 
   // PIX state
   const [pixLoading, setPixLoading] = useState(false);
-  const [pixData, setPixData] = useState<{ code: string; qrCode: string } | null>(null);
+  const [pixData, setPixData] = useState<{ code: string; qrCode: string; externalId?: string } | null>(null);
   const [pixError, setPixError] = useState('');
   const [pixCopied, setPixCopied] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
@@ -193,6 +193,7 @@ export default function MeuPlano() {
         setPixData({
           code: res.pixCode || '',
           qrCode: res.pixQrCode || `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(res.pixCode || 'PIX')}`,
+          externalId: res.externalId,
         });
       }
     } catch (e: any) {
@@ -214,15 +215,25 @@ export default function MeuPlano() {
     if (!planInfo?.companyId || paymentVerified) return;
     setCheckingPayment(true);
     try {
+      // 1. Try DB check first (fastest)
       const res = await checkPaymentStatus(planInfo.companyId);
       if (res.paid) {
         setPaymentVerified(true);
         setTimeout(() => window.location.reload(), 3000);
-      } else {
-        // Only alert if manually clicked (checkingPayment was false before this call)
-        // Actually handleVerifyPayment is also called manually. 
-        // Let's refine this to only alert if it's NOT a background poll.
+        return;
       }
+
+      // 2. If not in DB, and we have an externalId (Mercado Pago), check directly
+      if (pixData?.externalId) {
+        const extRes = await checkExternalPaymentStatus(pixData.externalId, planInfo.companyId);
+        if (extRes.paid) {
+          setPaymentVerified(true);
+          setTimeout(() => window.location.reload(), 3000);
+          return;
+        }
+      }
+      
+      alert('Pagamento ainda não reconhecido. O processamento bancário pode levar alguns minutos. Se o valor já saiu da sua conta, tente clicar novamente em instantes.');
     } catch (e) {
       console.error('Verify error:', e);
     } finally {
@@ -235,11 +246,19 @@ export default function MeuPlano() {
     let interval: any;
     if (pixData && !paymentVerified) {
       interval = setInterval(() => {
-        // Silent check (no alert on failure)
+        // First check DB
         checkPaymentStatus(planInfo?.companyId || '').then(res => {
           if (res.paid) {
             setPaymentVerified(true);
             setTimeout(() => window.location.reload(), 3000);
+          } else if (pixData?.externalId) {
+            // Then check MP directly via Edge Function
+            checkExternalPaymentStatus(pixData.externalId, planInfo?.companyId || '').then(extRes => {
+              if (extRes.paid) {
+                setPaymentVerified(true);
+                setTimeout(() => window.location.reload(), 3000);
+              }
+            });
           }
         }).catch(() => {});
       }, 7000); // Check every 7 seconds
