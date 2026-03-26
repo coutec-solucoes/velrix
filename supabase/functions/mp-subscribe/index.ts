@@ -9,20 +9,21 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 serve(async (req: Request) => {
-  // Handle CORS preflight
+  // 1. Handle CORS preflight (Enterprise standard)
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
     const body = await req.json();
     const { action, paymentId, companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual, customerData } = body;
 
+    // Single initialization for entire function
     const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
     const { data: settingsData } = await supabase.from('admin_settings').select('value').eq('key', 'mpSecretKey').single();
     const mpAccessToken = settingsData?.value || Deno.env.get('MP_ACCESS_TOKEN');
@@ -31,7 +32,7 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'MP Access Token não configurado' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ── ACTION: create_pix (New) ─────────────────────────────────────────────
+    // ── ACTION: create_pix ───────────────────────────────────────────────────
     if (action === 'create_pix' || (action === 'pix' && !tokenId)) {
       const mpPayload = {
         transaction_amount: Number(price),
@@ -86,13 +87,7 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: 'ID de pagamento ausente' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-      const { data: settingsData } = await supabase.from('admin_settings').select('value').eq('key', 'mpSecretKey').single();
-      const mpAccessToken = settingsData?.value || Deno.env.get('MP_ACCESS_TOKEN');
 
-      if (!mpAccessToken) {
-        return new Response(JSON.stringify({ error: 'MP Access Token não configurado' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
 
       const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { 'Authorization': `Bearer ${mpAccessToken}` },
@@ -145,32 +140,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── Pre-initialize Supabase ─────────────────────────────────────────────
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
 
-    // ── Get MP Access Token from Database (Admin Settings) ───────────────────
-    // This allows managing the secret via the Admin UI
-    const { data: settingsData, error: settingsError } = await supabase
-      .from('admin_settings')
-      .select('value')
-      .eq('key', 'mpSecretKey')
-      .single();
-
-    let mpAccessToken = Deno.env.get('MP_ACCESS_TOKEN'); // Fallback to env var
-    
-    if (settingsData?.value) {
-      mpAccessToken = settingsData.value;
-    }
-
-    if (!mpAccessToken) {
-      return new Response(
-        JSON.stringify({ error: 'Mercado Pago Secret Key (Access Token) não configurado no Admin -> APIs.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     // ── 1. Create payment at Mercado Pago ─────────────────────────────────────
     const mpPayload = {
