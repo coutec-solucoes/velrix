@@ -59,8 +59,12 @@ serve(async (req: Request) => {
 
     if (!mpResponse.ok) {
       const errorText = await mpResponse.text();
-      console.error('Failed to fetch payment status from MP:', errorText);
-      return new Response('MP fetch error', { status: 502 });
+      console.error('Failed to fetch payment status from MP (ID possibly invalid):', errorText);
+      // We return 200 to Mercado Pago to avoid infinite retries of test/deleted IDs
+      return new Response(JSON.stringify({ received: true, warning: 'Payment ID not found in MP' }), { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
     }
 
     const mpPayment = await mpResponse.json();
