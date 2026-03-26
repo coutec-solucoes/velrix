@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { AppModule } from '@/types';
-import { getAppData, onRealtimeStatusChange, getRealtimeStatus, onContractSigned, type RealtimeStatus } from '@/services/storageService';
+import { getAppData, onRealtimeStatusChange, getRealtimeStatus, onContractSigned, onDataChange, type RealtimeStatus } from '@/services/storageService';
 import { getData } from '@/services/storageService';
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
@@ -61,50 +61,49 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const { canView } = usePermissions();
   const { theme, toggleTheme } = useTheme();
   const currentMenuItem = menuItems.find((i) => i.path === location.pathname);
+  const [appData, setAppData] = useState(getAppData());
   const [rtStatus, setRtStatus] = useState<RealtimeStatus>(getRealtimeStatus());
 
   useEffect(() => {
-    return onRealtimeStatusChange(setRtStatus);
+    const unsubStatus = onRealtimeStatusChange(setRtStatus);
+    const unsubData = onDataChange(() => {
+      setAppData(getAppData());
+    });
+    return () => {
+      unsubStatus();
+      unsubData();
+    };
   }, []);
 
   // Listen for contracts signed by clients on the public page
   useEffect(() => {
     return onContractSigned((contractData) => {
-      const clients = getData('clients');
+      const clients = appData.clients || [];
       const clientName = clients.find((c) => c.id === contractData.clientId)?.name || 'Cliente';
       toast.success(`✍️ Contrato assinado!`, {
         description: `${clientName} assinou o contrato "${contractData.description || 'Contrato'}" agora mesmo.`,
         duration: 10000,
       });
     });
-  }, []);
+  }, [appData.clients]);
 
-  // Get company branding from local storage
+  // Get company branding from reactive appData
   const companyBranding = useMemo(() => {
-    try {
-      const data = getAppData();
-      return {
-        name: data.settings?.company?.name || 'VELRIX',
-        logo: data.settings?.company?.logo || null,
-      };
-    } catch {
-      return { name: 'VELRIX', logo: null };
-    }
-  }, [location.pathname]); // refresh on route change
+    return {
+      name: appData.settings?.company?.name || 'VELRIX',
+      logo: appData.settings?.company?.logo || null,
+    };
+  }, [appData.settings?.company]);
 
-  // Determine if cobradores feature is enabled
-  const cobradoresEnabled = useMemo(() => {
-    try {
-      return getAppData().settings?.cobradoresEnabled ?? false;
-    } catch {
-      return false;
-    }
-  }, [location.pathname]);
+  // Determine if cobradores feature is enabled reactively
+  const cobradoresEnabled = appData.settings?.cobradoresEnabled ?? false;
 
-  const visibleMenuItems = menuItems.filter(item => {
-    if (item.module === 'cobradores' && !cobradoresEnabled) return false;
-    return canView(item.module);
-  });
+  const visibleMenuItems = useMemo(() => {
+    return menuItems.filter(item => {
+      if (item.module === 'cobradores' && !cobradoresEnabled) return false;
+      return canView(item.module);
+    });
+  }, [cobradoresEnabled, canView]);
 
   return (
     <div className="min-h-screen flex bg-background">
