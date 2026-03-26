@@ -725,11 +725,29 @@ CREATE POLICY "Same company can view settings"
 CREATE POLICY "Admin can manage settings"
   ON app_settings FOR INSERT TO authenticated
   WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador'));
-
 CREATE POLICY "Admin can update settings"
   ON app_settings FOR UPDATE TO authenticated
   USING (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador'))
-  WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador'));`,
+  WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador'));
+
+-- Trigger para criar app_settings automaticamente quando uma empresa é criada
+CREATE OR REPLACE FUNCTION public.handle_new_company_settings()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.app_settings (company_id, late_fee_enabled, late_fee_percent, interest_per_day, cobradores_enabled)
+  VALUES (NEW.id, false, 2.0, 0.033, true)
+  ON CONFLICT (company_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_company_created ON companies;
+CREATE TRIGGER on_company_created
+  AFTER INSERT ON companies
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_company_settings();`,
   },
 
   // ========== ADMIN / SAAS TABLES ==========

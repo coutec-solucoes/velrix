@@ -88,6 +88,7 @@ const tableMap: Record<string, string> = {
   cashMovements: 'cash_movements',
   auditLogs: 'audit_logs',
   cobradores: 'cobradores',
+  appSettings: 'app_settings',
 };
 
 const UUID_FIELDS = new Set(['client_id', 'bank_account_id', 'transaction_id', 'installment_group_id', 'cobrador_id']);
