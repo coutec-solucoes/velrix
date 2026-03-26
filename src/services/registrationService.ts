@@ -80,6 +80,25 @@ export async function registerAccount(data: RegisterData, isTrial: boolean = fal
   return null;
 }
 
+/**
+ * Resends the confirmation email to the user.
+ */
+export async function resendConfirmationEmail(email: string): Promise<string | null> {
+  const supabase = getSupabase();
+  if (!supabase) return 'supabase_not_configured';
+
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+    options: {
+      emailRedirectTo: window.location.origin,
+    },
+  });
+
+  if (error) return error.message;
+  return null;
+}
+
 export interface SetupAccountFlowParams {
   registrationData: RegisterData;
   paymentData: PaymentResponse | null;

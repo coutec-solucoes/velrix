@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { CreditCard, Shield, CheckCircle2, Loader2, AlertTriangle, RefreshCw, Star, Copy, Smartphone, ToggleLeft, ToggleRight, BadgePercent } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { fetchAdminSettings } from '@/services/adminSupabaseService';
-import { initiatePayment } from '@/services/paymentService';
+import { initiatePayment, checkPaymentStatus } from '@/services/paymentService';
 
 interface PlanInfo {
   name: string;
@@ -44,6 +44,8 @@ export default function MeuPlano() {
   const [pixData, setPixData] = useState<{ code: string; qrCode: string } | null>(null);
   const [pixError, setPixError] = useState('');
   const [pixCopied, setPixCopied] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [paymentVerified, setPaymentVerified] = useState(false);
 
   // Card state
   const [cardForm, setCardForm] = useState<CardForm>({
@@ -203,6 +205,24 @@ export default function MeuPlano() {
       navigator.clipboard.writeText(pixData.code);
       setPixCopied(true);
       setTimeout(() => setPixCopied(false), 2500);
+    }
+  };
+
+  const handleVerifyPayment = async () => {
+    if (!planInfo?.companyId) return;
+    setCheckingPayment(true);
+    try {
+      const res = await checkPaymentStatus(planInfo.companyId);
+      if (res.paid) {
+        setPaymentVerified(true);
+        setTimeout(() => window.location.reload(), 3000);
+      } else {
+        alert('Pagamento ainda não reconhecido. O processamento bancário pode levar alguns minutos. Se o valor já saiu da sua conta, tente clicar novamente em instantes.');
+      }
+    } catch (e) {
+      console.error('Verify error:', e);
+    } finally {
+      setCheckingPayment(false);
     }
   };
 
@@ -442,14 +462,14 @@ export default function MeuPlano() {
       </div>
 
       {/* Payment section */}
-      {cardSuccess ? (
+      {cardSuccess || paymentVerified ? (
         <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6 flex flex-col items-center text-center gap-3">
           <CheckCircle2 size={40} className="text-green-400" />
-          <h3 className="font-bold text-green-300 text-lg">Assinatura ativada com sucesso!</h3>
+          <h3 className="font-bold text-green-300 text-lg">Pagamento confirmado com sucesso!</h3>
           <p className="text-green-200/70 text-sm">
             {isAnnual
               ? 'Plano anual ativado. Você tem acesso garantido por 12 meses!'
-              : 'Seu plano foi ativado. A renovação será automática todo mês.'}
+              : 'Seu plano foi ativado. Aproveite todos os recursos do sistema.'}
           </p>
         </div>
       ) : (
@@ -596,9 +616,17 @@ export default function MeuPlano() {
                       </button>
                     </div>
 
-                    <div className="text-xs text-muted-foreground text-center space-y-1">
-                      <p>✅ Após o pagamento, seu plano será ativado em até <strong>5 minutos</strong>.</p>
-                      <p>Em caso de dúvidas, entre em contato com o suporte.</p>
+                    <div className="text-xs text-muted-foreground text-center space-y-2">
+                      <p>✅ Após o pagamento, clique em verificar ou aguarde até <strong>5 minutos</strong>.</p>
+                      
+                      <button
+                        onClick={handleVerifyPayment}
+                        disabled={checkingPayment}
+                        className="flex items-center justify-center gap-2 mx-auto px-4 py-2 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary font-bold hover:bg-secondary/20 transition-all disabled:opacity-50"
+                      >
+                        {checkingPayment ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                        {checkingPayment ? 'Verificando...' : 'Já paguei! Verificar agora'}
+                      </button>
                     </div>
 
                     <button

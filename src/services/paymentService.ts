@@ -96,6 +96,53 @@ function buildPixEMV(
 }
 
 async function initiatePixPayment(data: PaymentInitiation, settings: AdminSettings): Promise<PaymentResponse> {
+  // If Mercado Pago is configured, use it for automated PIX
+  if (settings.mpPublicKey && settings.mpSecretKey) {
+    try {
+      const response = await fetch('https://api.mercadopago.com/v1/payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.mpSecretKey}`,
+          'X-Idempotency-Key': `pix-${Date.now()}`,
+        },
+        body: JSON.stringify({
+          transaction_amount: data.amount,
+          description: data.description,
+          payment_method_id: 'pix',
+          payer: {
+            email: data.customer.email,
+            first_name: data.customer.name.split(' ')[0],
+            last_name: data.customer.name.split(' ').slice(1).join(' ') || 'User',
+            identification: {
+              type: data.customer.document.length > 11 ? 'CNPJ' : 'CPF',
+              number: data.customer.document.replace(/\D/g, ''),
+            },
+          },
+          metadata: {
+            customer_email: data.customer.email,
+            description: data.description
+          }
+        }),
+      });
+
+      const mpData = await response.json();
+
+      if (response.ok && mpData.point_of_interaction?.transaction_data) {
+        return {
+          success: true,
+          pixCode: mpData.point_of_interaction.transaction_data.qr_code,
+          pixQrCode: `data:image/png;base64,${mpData.point_of_interaction.transaction_data.qr_code_base64}`,
+        };
+      } else {
+        console.warn('[PaymentService] MP PIX failed, falling back to static:', mpData);
+      }
+    } catch (err) {
+      console.error('[PaymentService] Error initiating MP PIX:', err);
+    }
+  }
+
+  // Fallback to Static PIX (requires manual confirmation)
   if (!settings.pixKey) {
     return {
       success: false,
@@ -112,7 +159,6 @@ async function initiatePixPayment(data: PaymentInitiation, settings: AdminSettin
       data.description
     );
 
-    // QR code from the actual generated PIX code
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=16&data=${encodeURIComponent(pixCode)}`;
 
     return {
@@ -152,4 +198,30 @@ async function initiateBancardPayment(data: PaymentInitiation, settings: AdminSe
     success: true,
     paymentUrl: 'https://vpos.infonet.com.py/checkout/placeholder',
   };
+}
+
+/**
+ * Checks if a payment for the company has been registered in the database as 'pago'.
+ * This is used for polling or manual verification.
+ */
+export async function checkPaymentStatus(companyId: string): Promise<{ paid: boolean; error?: string }> {
+  try {
+    const { getSupabase } = await import('@/lib/supabase');
+    const supabase = getSupabase();
+    if (!supabase) return { paid: false, error: 'Supabase not configured' };
+
+    const { data, error } = await supabase
+      .from('saas_payments')
+      .select('status')
+      .eq('company_id', companyId)
+      .eq('status', 'pago')
+      .order('date', { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+
+    return { paid: Boolean(data && data.length > 0) };
+  } catch (err: any) {
+    return { paid: false, error: err.message };
+  }
 }

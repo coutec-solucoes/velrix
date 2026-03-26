@@ -5,7 +5,7 @@ import veltorLogo from '@/assets/veltor-logo.png';
 import { applyDocumentMask, applyPhoneMask } from '@/utils/masks';
 import { fetchPlans } from '@/services/adminSupabaseService';
 import { SaasPlan } from '@/types/admin';
-import { registerAccount } from '@/services/registrationService';
+import { registerAccount, resendConfirmationEmail } from '@/services/registrationService';
 
 interface Props {
   onBackToLogin: () => void;
@@ -154,6 +154,20 @@ export default function Register({ onBackToLogin }: Props) {
     return country === 'BR' ? '(11) 99999-0000' : '(0981) 000-000';
   };
 
+  const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  const handleResendEmail = async () => {
+    setResendStatus('loading');
+    const err = await resendConfirmationEmail(email);
+    if (!err) {
+      setResendStatus('success');
+      setTimeout(() => setResendStatus('idle'), 5000);
+    } else {
+      setResendStatus('error');
+      setTimeout(() => setResendStatus('idle'), 5000);
+    }
+  };
+
   if (success) {
     return (
       <div
@@ -165,16 +179,41 @@ export default function Register({ onBackToLogin }: Props) {
           <img src={veltorLogo} alt="Velrix" className="w-3/4 max-w-[220px] h-auto drop-shadow-lg mb-6" />
           <div className="w-full bg-black/40 backdrop-blur-md rounded-xl border border-white/10 p-6 space-y-4 shadow-2xl text-center">
             <div className="text-4xl mb-2">✉️</div>
-            <h2 className="text-white font-semibold text-lg">Verifique seu email</h2>
-            <p className="text-white/60 text-sm">
-              Enviamos um link de confirmação para <strong className="text-white">{email}</strong>. Clique no link para ativar sua conta.
+            <h2 className="text-white font-semibold text-lg">Quase lá! Verifique seu e-mail</h2>
+            <div className="space-y-3">
+              <p className="text-white/60 text-sm">
+                Enviamos um link de confirmação para <strong className="text-white font-medium">{email}</strong>.
+              </p>
+              <p className="text-white/40 text-[11px] leading-relaxed">
+                Se não encontrar em alguns minutos, verifique a pasta de <strong>Spam</strong> ou <strong>Promoções</strong>.
+              </p>
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <button
+                onClick={handleResendEmail}
+                disabled={resendStatus === 'loading' || resendStatus === 'success'}
+                className={`w-full py-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                  resendStatus === 'success' 
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                    : 'bg-white/5 hover:bg-white/10 text-white/70 border border-white/10'
+                }`}
+              >
+                {resendStatus === 'loading' ? <Loader2 size={14} className="animate-spin" /> : null}
+                {resendStatus === 'success' ? 'E-mail enviado novamente!' : 'Não recebeu? Reenviar e-mail'}
+              </button>
+              
+              <button
+                onClick={onBackToLogin}
+                className="w-full px-4 py-3 rounded-lg bg-secondary text-secondary-foreground font-bold hover:opacity-90 transition-opacity"
+              >
+                Voltar ao login
+              </button>
+            </div>
+
+            <p className="text-white/30 text-[10px] italic">
+              Nota: O serviço de e-mail pode levar até 5 minutos para processar o envio.
             </p>
-            <button
-              onClick={onBackToLogin}
-              className="w-full px-4 py-3 rounded-lg bg-secondary text-secondary-foreground font-medium hover:opacity-90 transition-opacity"
-            >
-              Voltar ao login
-            </button>
           </div>
         </div>
       </div>
