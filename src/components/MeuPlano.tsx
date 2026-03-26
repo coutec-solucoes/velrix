@@ -209,6 +209,18 @@ export default function MeuPlano() {
       d ? `${a}.${b}.${c}-${d}` : c ? `${a}.${b}.${c}` : b ? `${a}.${b}` : a
     );
 
+  // ── Detect card brand from first digits ──────────────────────────────────
+  const getPaymentMethodId = (cardNumber: string): string => {
+    const n = cardNumber.replace(/\s/g, '');
+    if (/^4/.test(n)) return 'visa';
+    if (/^5[1-5]/.test(n) || /^2[2-7]/.test(n)) return 'master';
+    if (/^3[47]/.test(n)) return 'amex';
+    if (/^(636368|438935|504175|451416|636297|5067|4576|4011)/.test(n)) return 'elo';
+    if (/^606282/.test(n)) return 'hipercard';
+    if (/^38|^60/.test(n)) return 'debmaster';
+    return 'visa'; // safe fallback
+  };
+
   // ── Card submit ───────────────────────────────────────────────────────────
   const handleCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,6 +284,8 @@ export default function MeuPlano() {
             planName: planInfo?.name,
             price: planInfo?.price,
             currency: planInfo?.currency,
+            paymentMethodId: getPaymentMethodId(cardForm.cardNumber),
+            payerEmail: planInfo?.userEmail || '',
           },
         });
 

@@ -20,7 +20,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { companyId, tokenId, planName, price, currency } = await req.json();
+    const { companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail } = await req.json();
 
     if (!companyId || !tokenId || !price) {
       return new Response(
@@ -62,9 +62,10 @@ serve(async (req: Request) => {
       token: tokenId,
       description: `Assinatura ${planName || 'Veltor Finance'}`,
       installments: 1,
-      payment_method_id: 'credit_card',
-      // If you want to create a subscription instead of a single charge, use preapproval API
-      // For monthly recurring billing, this needs to be called every month or use MP subscriptions
+      payment_method_id: paymentMethodId || 'visa', // e.g., 'visa', 'master', 'elo', 'amex'
+      payer: {
+        email: payerEmail || 'pagador@email.com',
+      },
       metadata: {
         company_id: companyId,
         plan_name: planName,
