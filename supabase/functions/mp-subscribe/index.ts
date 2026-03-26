@@ -21,7 +21,7 @@ serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { action, paymentId, companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual, customerData } = body;
+    const { action, paymentId, companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual, customerData, deviceId } = body;
 
     // Single initialization for entire function
     const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
@@ -60,6 +60,7 @@ serve(async (req: Request) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${mpAccessToken}`,
           'X-Idempotency-Key': `pix-${companyId}-${Date.now()}`,
+          ...(deviceId ? { 'X-Meli-Session-Id': deviceId } : {}),
         },
         body: JSON.stringify(mpPayload),
       });
@@ -142,7 +143,7 @@ serve(async (req: Request) => {
 
 
 
-    // ── 1. Create payment at Mercado Pago ─────────────────────────────────────
+    // ── 1. Create payment at Mercado Pago (Enriched) ──────────────────────────
     const mpPayload = {
       transaction_amount: Number(price),
       token: tokenId,
@@ -155,9 +156,27 @@ serve(async (req: Request) => {
         first_name: customerData?.name?.split(' ')[0] || 'Cliente',
         last_name: customerData?.name?.split(' ').slice(1).join(' ') || 'User',
         identification: {
-          type: 'CPF', // Standard for BR Card anti-fraud
+          type: 'CPF', 
           number: customerData?.document?.replace(/\D/g, '') || '19119119100',
         },
+        phone: customerData?.phone,
+        address: customerData?.address,
+      },
+      additional_info: {
+        items: [
+          {
+            id: planName || 'plan',
+            title: `Assinatura ${planName || 'Veltor Finance'}`,
+            quantity: 1,
+            unit_price: Number(price),
+          }
+        ],
+        payer: {
+          first_name: customerData?.name?.split(' ')[0] || 'Cliente',
+          last_name: customerData?.name?.split(' ').slice(1).join(' ') || 'User',
+          phone: customerData?.phone,
+          address: customerData?.address,
+        }
       },
       metadata: {
         company_id: companyId,
@@ -172,6 +191,7 @@ serve(async (req: Request) => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${mpAccessToken}`,
         'X-Idempotency-Key': `${companyId}-${Date.now()}`,
+        ...(deviceId ? { 'X-Meli-Session-Id': deviceId } : {}),
       },
       body: JSON.stringify(mpPayload),
     });

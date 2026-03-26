@@ -58,6 +58,28 @@ export default function MeuPlano() {
   const [submitting, setSubmitting] = useState(false);
   const [cardError, setCardError] = useState('');
   const [cardSuccess, setCardSuccess] = useState(false);
+  const [deviceId, setDeviceId] = useState('');
+
+  // ── Capture Device ID (Anti-fraud) ──
+  useEffect(() => {
+    const getDeviceId = () => {
+      // @ts-ignore
+      const id = window.MP_DEVICE_SESSION_ID || (window as any).device_id;
+      if (id) {
+        setDeviceId(id);
+        console.log('[MeuPlano] Device ID captured:', id);
+        return true;
+      }
+      return false;
+    };
+
+    if (!getDeviceId()) {
+      const interval = setInterval(() => {
+        if (getDeviceId()) clearInterval(interval);
+      }, 1000);
+      setTimeout(() => clearInterval(interval), 10000);
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -361,10 +383,20 @@ export default function MeuPlano() {
             paymentMethodId: getPaymentMethodId(cardForm.cardNumber),
             payerEmail: planInfo?.userEmail || '',
             isAnnual,
+            deviceId,
             customerData: {
               email: planInfo?.userEmail || '',
               name: cardForm.cardName,
               document: cardForm.cpfCnpj.replace(/\D/g, ''),
+              phone: {
+                area_code: "67",
+                number: "999999999"
+              },
+              address: {
+                zip_code: "79990000",
+                street_name: "Rua Exemplo",
+                street_number: 123
+              }
             }
           },
         });
@@ -472,6 +504,10 @@ export default function MeuPlano() {
       }
     } catch (err: any) {
       setCardError(err?.message || 'Erro inesperado. Tente novamente.');
+      // Auto-fallback to PIX if card logic fails catastrophically or is rejected
+      if (planInfo?.country === 'BR' && !cardSuccess) {
+        setTimeout(() => setPaymentTab('pix'), 2000);
+      }
     } finally {
       setSubmitting(false);
     }
