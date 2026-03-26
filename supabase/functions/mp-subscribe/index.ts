@@ -20,7 +20,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail } = await req.json();
+    const { companyId, tokenId, planName, price, currency, paymentMethodId, payerEmail, isAnnual } = await req.json();
 
     if (!companyId || !tokenId || !price) {
       return new Response(
@@ -95,9 +95,9 @@ serve(async (req: Request) => {
     // ── 2. Update company status in Supabase ──────────────────────────────────
     // (supabase client is already initialized at the top)
 
-    // Set plan expiry to 30 days from now
+    // Set plan expiry: 365 days for annual plans, 30 days for monthly
     const expiry = new Date();
-    expiry.setDate(expiry.getDate() + 30);
+    expiry.setDate(expiry.getDate() + (isAnnual ? 365 : 30));
 
     const { error: updateError } = await supabase
       .from('saas_companies')
@@ -118,7 +118,7 @@ serve(async (req: Request) => {
       amount: price,
       currency: currency || 'BRL',
       status: 'pago',
-      description: `Assinatura ${planName} — Cartão MP (${mpResult.id})`,
+      description: `${isAnnual ? 'Plano Anual' : 'Assinatura'} ${planName} — Cartão MP (${mpResult.id})`,
       date: new Date().toISOString(),
     });
 

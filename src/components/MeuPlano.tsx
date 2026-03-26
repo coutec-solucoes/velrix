@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Shield, CheckCircle2, Loader2, AlertTriangle, RefreshCw, Star, Copy, Smartphone } from 'lucide-react';
+import { CreditCard, Shield, CheckCircle2, Loader2, AlertTriangle, RefreshCw, Star, Copy, Smartphone, ToggleLeft, ToggleRight, BadgePercent } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { fetchAdminSettings } from '@/services/adminSupabaseService';
 import { initiatePayment } from '@/services/paymentService';
@@ -29,12 +29,14 @@ interface CardForm {
 }
 
 type PaymentTab = 'pix' | 'card';
+type BillingCycle = 'mensal' | 'anual';
 
 export default function MeuPlano() {
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [mpPublicKey, setMpPublicKey] = useState<string>('');
   const [paymentTab, setPaymentTab] = useState<PaymentTab>('pix');
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('mensal');
 
   // PIX state
   const [pixLoading, setPixLoading] = useState(false);
@@ -150,6 +152,12 @@ export default function MeuPlano() {
     load();
   }, []);
 
+  // ── Billing cycle computed ────────────────────────────────────────────────
+  const isAnnual = billingCycle === 'anual';
+  const monthlyPrice = planInfo?.price || 0;
+  const annualPrice = Math.round(monthlyPrice * 10); // 2 months free
+  const activePrice = isAnnual ? annualPrice : monthlyPrice;
+
   // ── PIX ──────────────────────────────────────────────────────────────────
   const handleGerarPix = async () => {
     setPixError('');
@@ -158,9 +166,9 @@ export default function MeuPlano() {
     try {
       const res = await initiatePayment(
         {
-          amount: planInfo?.price || 0,
+          amount: activePrice,
           currency: planInfo?.currency || 'BRL',
-          description: `Assinatura ${planInfo?.name}`,
+          description: `${isAnnual ? 'Plano Anual' : 'Assinatura'} ${planInfo?.name}`,
           customer: {
             name: planInfo?.userName || '',
             email: planInfo?.userEmail || '',
@@ -282,10 +290,11 @@ export default function MeuPlano() {
             companyId: planInfo?.companyId,
             tokenId: cardToken.id,
             planName: planInfo?.name,
-            price: planInfo?.price,
+            price: activePrice,
             currency: planInfo?.currency,
             paymentMethodId: getPaymentMethodId(cardForm.cardNumber),
             payerEmail: planInfo?.userEmail || '',
+            isAnnual,
           },
         });
 
@@ -426,10 +435,52 @@ export default function MeuPlano() {
         <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6 flex flex-col items-center text-center gap-3">
           <CheckCircle2 size={40} className="text-green-400" />
           <h3 className="font-bold text-green-300 text-lg">Assinatura ativada com sucesso!</h3>
-          <p className="text-green-200/70 text-sm">Seu plano foi ativado. A renovação será automática todo mês.</p>
+          <p className="text-green-200/70 text-sm">
+            {isAnnual
+              ? 'Plano anual ativado. Você tem acesso garantido por 12 meses!'
+              : 'Seu plano foi ativado. A renovação será automática todo mês.'}
+          </p>
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border card-shadow overflow-hidden">
+
+          {/* ── Billing cycle toggle ── */}
+          {monthlyPrice > 0 && (
+            <div className="px-6 py-4 border-b border-border">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Ciclo de Cobrança</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {isAnnual
+                      ? `${currencySymbol} ${annualPrice.toLocaleString()}/ano — equivale a ${currencySymbol} ${Math.round(annualPrice / 12).toLocaleString()}/mês`
+                      : `${currencySymbol} ${monthlyPrice.toLocaleString()}/mês`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isAnnual && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full animate-pulse"
+                      style={{ background: 'linear-gradient(135deg,#00b06b,#00d4aa)', color: '#fff' }}>
+                      2 meses grátis
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBillingCycle(isAnnual ? 'mensal' : 'anual');
+                      setPixData(null);
+                      setPixError('');
+                      setCardError('');
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm font-medium transition-all hover:border-secondary"
+                  >
+                    {isAnnual ? <ToggleRight size={18} className="text-secondary" /> : <ToggleLeft size={18} className="text-muted-foreground" />}
+                    {isAnnual ? 'Anual' : 'Mensal'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tab switcher */}
           <div className="flex border-b border-border">
             {/* Only show PIX tab for Brazil */}
@@ -648,7 +699,7 @@ export default function MeuPlano() {
                     {submitting ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
                     {submitting
                       ? 'Processando...'
-                      : `Ativar — ${currencySymbol} ${planInfo?.price?.toLocaleString() || '0'}/mês`}
+                      : `Ativar — ${currencySymbol} ${activePrice.toLocaleString()}/${isAnnual ? 'ano' : 'mês'}`}
                   </button>
 
                   <div className="flex items-center justify-center gap-2 text-muted-foreground text-xs">
