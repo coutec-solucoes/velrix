@@ -5,6 +5,8 @@ export interface PaymentInitiation {
   amount: number;
   currency: string;
   description: string;
+  companyId: string;
+  isAnnual: boolean;
   customer: {
     name: string;
     email: string;
@@ -121,7 +123,9 @@ async function initiatePixPayment(data: PaymentInitiation, settings: AdminSettin
           },
           metadata: {
             customer_email: data.customer.email,
-            description: data.description
+            description: data.description,
+            company_id: data.companyId,
+            is_annual: data.isAnnual
           }
         }),
       });

@@ -175,6 +175,8 @@ export default function MeuPlano() {
           amount: activePrice,
           currency: planInfo?.currency || 'BRL',
           description: `${isAnnual ? 'Plano Anual' : 'Assinatura'} ${planInfo?.name}`,
+          companyId: planInfo?.companyId || '',
+          isAnnual: isAnnual,
           customer: {
             name: planInfo?.userName || '',
             email: planInfo?.userEmail || '',

@@ -83,9 +83,23 @@ serve(async (req: Request) => {
         return new Response('Already processed', { status: 200 });
       }
 
-      // Calculate expiry (default 30 days unless specified)
-      const expiry = new Date();
-      expiry.setDate(expiry.getDate() + 30);
+      // Calculate expiry (cumulative)
+      const { data: companyData } = await supabase
+        .from('saas_companies')
+        .select('plan_expiry')
+        .eq('id', companyId)
+        .single();
+
+      const now = new Date();
+      let currentExpiry = companyData?.plan_expiry ? new Date(companyData.plan_expiry) : now;
+      if (currentExpiry < now) currentExpiry = now;
+
+      // MP PIX usually 30 days, but we can check if it was annual via metadata if we send it
+      const isAnnual = mpPayment.metadata?.is_annual === true || mpPayment.metadata?.is_annual === 'true';
+      const daysToAdd = isAnnual ? 365 : 30;
+
+      const expiry = new Date(currentExpiry);
+      expiry.setDate(expiry.getDate() + daysToAdd);
 
       // Update Company
       const { error: updateError } = await supabase
