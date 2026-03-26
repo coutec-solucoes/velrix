@@ -563,12 +563,26 @@ async function syncSettingsToSupabase(settings: AppData['settings']) {
       country: company.country, language: company.language,
       multi_currency: company.multiCurrency, currency_priority: company.currencyPriority,
       active_currencies: company.activeCurrencies, exchange_rates: company.exchangeRates,
+      // Extra fields stored in companies table too
+      document: company.document || null,
+      phone: company.phone || null,
+      email: company.email || null,
+      address: company.address || null,
     }, { onConflict: 'id' });
 
     if (compErr) {
-      console.error('[Supabase] companies sync failed:', compErr.message);
+      console.warn('[Supabase] companies sync warning (some columns may not exist):', compErr.message);
     } else {
       console.log('[Supabase] ✅ companies synced');
+    }
+
+    // Also sync back to saas_companies so admin panel stays in sync
+    if (company.document || company.phone || company.email) {
+      await supabase.from('saas_companies').update({
+        document: company.document || null,
+        contact_phone: company.phone || null,
+        contact_email: company.email || null,
+      }).eq('id', companyId);
     }
 
     // Sync current exchange rates to dedicated table
@@ -711,6 +725,13 @@ async function doPullFromSupabase(): Promise<boolean> {
         if (planData) planFeatures = planData.features || '';
       }
 
+      // Also fetch document/phone/email from saas_companies (filled at registration)
+      const { data: saasCompFull } = await supabase
+        .from('saas_companies')
+        .select('document, contact_phone, contact_email, contact_name')
+        .eq('id', companyId)
+        .single();
+
       const currentData = getAppData();
       currentData.settings = { ...currentData.settings, company: {
         id: c.id, name: c.name, logo: c.logo, country: c.country,
@@ -719,6 +740,11 @@ async function doPullFromSupabase(): Promise<boolean> {
         exchangeRates: exchangeRates || [],
         planId,
         planFeatures,
+        // From saas_companies — filled at registration
+        document: c.document || saasCompFull?.document || '',
+        phone: c.phone || saasCompFull?.contact_phone || '',
+        email: c.email || saasCompFull?.contact_email || '',
+        address: c.address || '',
       }};
       updateCache(currentData);
       notifyListeners('companies');
