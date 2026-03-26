@@ -60,16 +60,17 @@ serve(async (req: Request) => {
           expiry.setDate(expiry.getDate() + days);
 
           await supabase.from('saas_companies').update({ status: 'ativo', plan_expiry: expiry.toISOString() }).eq('id', finalCompanyId);
+          console.log(`[mp-subscribe] PIX check: Company ${finalCompanyId} updated. New expiry: ${expiry.toISOString()}`);
           
           // Record Payment
-          const { data: existing } = await supabase.from('saas_payments').select('id').eq('description', `Confirmação PIX (${paymentId})`).maybeSingle();
+          const { data: existing } = await supabase.from('saas_payments').select('id').eq('description', `MP-PAYMENT-${paymentId}`).maybeSingle();
           if (!existing) {
             await supabase.from('saas_payments').insert({
               company_id: finalCompanyId,
               amount: mpPayment.transaction_amount,
               currency: mpPayment.currency_id || 'BRL',
               status: 'pago',
-              description: `Confirmação PIX (${paymentId})`,
+              description: `MP-PAYMENT-${paymentId}`,
               date: new Date().toISOString(),
             });
           }
@@ -127,6 +128,7 @@ serve(async (req: Request) => {
       metadata: {
         company_id: companyId,
         plan_name: planName,
+        is_annual: isAnnual,
       },
     };
 
@@ -180,6 +182,8 @@ serve(async (req: Request) => {
       })
       .eq('id', companyId);
 
+    console.log(`[mp-subscribe] Company ${companyId} updated. New expiry: ${expiry.toISOString()}`);
+
     if (updateError) {
       console.error('Failed to update company status:', updateError);
       // Payment succeeded but DB update failed — log and continue
@@ -191,7 +195,7 @@ serve(async (req: Request) => {
       amount: price,
       currency: currency || 'BRL',
       status: 'pago',
-      description: `${isAnnual ? 'Plano Anual' : 'Assinatura'} ${planName} — Cartão MP (${mpResult.id})`,
+      description: `MP-PAYMENT-${mpResult.id}`,
       date: new Date().toISOString(),
     });
 

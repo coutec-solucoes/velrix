@@ -540,14 +540,14 @@ export default function MeuPlano() {
       </div>
 
       {/* Payment section */}
-      {cardSuccess || paymentVerified ? (
+      {(cardSuccess || paymentVerified) ? (
         <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6 flex flex-col items-center text-center gap-3">
           <CheckCircle2 size={40} className="text-green-400" />
           <h3 className="font-bold text-green-300 text-lg">Pagamento confirmado com sucesso!</h3>
           <p className="text-green-200/70 text-sm">
             {isAnnual
-              ? 'Plano anual ativado. Você tem acesso garantido por 12 meses!'
-              : 'Seu plano foi ativado. Aproveite todos os recursos do sistema.'}
+              ? 'Plano Anual ativado! Parabéns, agora você pode desfrutar de 12 meses de acesso total ao sistema.'
+              : 'Assinatura Mensal ativada! Aproveite os próximos 30 dias com todos os recursos liberados.'}
           </p>
         </div>
       ) : (

@@ -80,7 +80,7 @@ serve(async (req: Request) => {
       const { data: existingPayment } = await supabase
         .from('saas_payments')
         .select('id')
-        .eq('description', `MP-WEBHOOK-${paymentId}`)
+        .eq('description', `MP-PAYMENT-${paymentId}`)
         .single();
 
       if (existingPayment) {
@@ -125,7 +125,7 @@ serve(async (req: Request) => {
         amount: mpPayment.transaction_amount,
         currency: mpPayment.currency_id || 'BRL',
         status: 'pago',
-        description: `Confirmação automática PIX/Cartão Mercado Pago (${paymentId})`,
+        description: `MP-PAYMENT-${paymentId}`,
         date: new Date().toISOString(),
       });
       
