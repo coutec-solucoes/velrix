@@ -98,8 +98,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // Determine if cobradores feature is enabled reactively
   const canUseCobradores = useMemo(() => {
     const features = (appData.settings?.company?.planFeatures || '').toLowerCase();
-    return features.includes('cobrador') || features.includes('completo') || features.includes('pro') || features.includes('ilimitado');
-  }, [appData.settings?.company?.planFeatures]);
+    const planName = (appData.settings?.company?.planName || '').toLowerCase();
+    return features.includes('cobrador') || features.includes('completo') || features.includes('pro') || features.includes('ilimitado') ||
+           planName.includes('completo') || planName.includes('pro');
+  }, [appData.settings?.company?.planFeatures, appData.settings?.company?.planName]);
 
   const cobradoresEnabled = (appData.settings?.cobradoresEnabled ?? false) && canUseCobradores;
 

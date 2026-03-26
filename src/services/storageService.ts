@@ -718,14 +718,18 @@ async function doPullFromSupabase(): Promise<boolean> {
       const saasC = saasCompRes.data?.[0];
       const planId = saasC?.plan_id;
       let planFeatures = '';
+      let planName = '';
 
       if (planId) {
         const { data: planData } = await supabase
           .from('saas_plans')
-          .select('features')
+          .select('name, features')
           .eq('id', planId)
           .single();
-        if (planData) planFeatures = planData.features || '';
+        if (planData) {
+          planFeatures = planData.features || '';
+          planName = planData.name || '';
+        }
       }
 
       // Also fetch document/phone/email from saas_companies (filled at registration)
@@ -742,6 +746,7 @@ async function doPullFromSupabase(): Promise<boolean> {
         currencyPriority: c.currency_priority, activeCurrencies: c.active_currencies,
         exchangeRates: exchangeRates || [],
         planId,
+        planName,
         planFeatures,
         // From saas_companies — filled at registration
         document: c.document || saasCompFull?.document || '',

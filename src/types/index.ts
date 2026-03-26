@@ -108,6 +108,7 @@ export interface Company {
   activeCurrencies: Currency[];
   exchangeRates: ExchangeRate[];
   planId?: string;
+  planName?: string;
   planFeatures?: string;
 }
 

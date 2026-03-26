@@ -128,18 +128,24 @@ export default function Configuracoes() {
   };
 
   const features = (company.planFeatures || '').toLowerCase();
+  const planName = (company.planName || '').toLowerCase();
+
   const canUseMultiCurrency = 
     features.includes('moeda') || 
     features.includes('multi') || 
     features.includes('completo') || 
     features.includes('pro') ||
-    features.includes('ilimitado');
+    features.includes('ilimitado') ||
+    planName.includes('completo') ||
+    planName.includes('pro');
 
   const canUseCobradores = 
     features.includes('cobrador') || 
     features.includes('completo') || 
     features.includes('pro') ||
-    features.includes('ilimitado');
+    features.includes('ilimitado') ||
+    planName.includes('completo') ||
+    planName.includes('pro');
 
   const toggleMultiCurrency = () => {
     if (!canUseMultiCurrency && !company.multiCurrency) {
