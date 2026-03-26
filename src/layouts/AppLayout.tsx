@@ -95,22 +95,28 @@ export default function AppLayout({ children }: AppLayoutProps) {
     };
   }, [appData.settings?.company]);
 
-  // Determine if cobradores feature is enabled reactively
-  const canUseCobradores = useMemo(() => {
+  const isModuleAllowed = (module: AppModule) => {
     const features = (appData.settings?.company?.planFeatures || '').toLowerCase();
     const planName = (appData.settings?.company?.planName || '').toLowerCase();
-    return features.includes('cobrador') || features.includes('completo') || features.includes('pro') || features.includes('ilimitado') ||
-           planName.includes('completo') || planName.includes('pro');
-  }, [appData.settings?.company?.planFeatures, appData.settings?.company?.planName]);
+    const isPro = planName.includes('pro') || planName.includes('completo') || features.includes('completo');
 
-  const cobradoresEnabled = (appData.settings?.cobradoresEnabled ?? false) && canUseCobradores;
+    if (isPro) return true;
+
+    // Specific module checks for non-pro plans
+    if (module === 'cobradores') return (appData.settings?.cobradoresEnabled ?? false) && features.includes('cobrador');
+    if (module === 'contratos') return features.includes('contratos');
+    if (module === 'auditoria') return features.includes('auditoria');
+    if (module === 'contasBancarias') return features.includes('bancos');
+    
+    return true; 
+  };
 
   const visibleMenuItems = useMemo(() => {
     return menuItems.filter(item => {
-      if (item.module === 'cobradores' && !cobradoresEnabled) return false;
+      if (!isModuleAllowed(item.module)) return false;
       return canView(item.module);
     });
-  }, [cobradoresEnabled, canView]);
+  }, [appData.settings?.company, appData.settings?.cobradoresEnabled, canView]);
 
   return (
     <div className="min-h-screen flex bg-background">

@@ -169,6 +169,20 @@ export default function Clientes() {
 
   const handleSave = async () => {
     if (!form.name) return;
+    
+    // Verificação de limite de clientes (Plano Starter = 50)
+    if (!editing) {
+      const appData = getAppData();
+      const features = (appData.settings?.company?.planFeatures || '').toLowerCase();
+      const planName = (appData.settings?.company?.planName || '').toLowerCase();
+      const isUnlimited = features.includes('ilimitado') || features.includes('completo') || planName.includes('pro') || planName.includes('completo');
+      
+      if (!isUnlimited && clients.length >= 50) {
+        alert('Seu plano atual possui um limite de 50 clientes. Entre em contato com o suporte para realizar o upgrade para Clientes Ilimitados.');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const dataToSave = { ...form, cobradorId: form.cobradorId || undefined };

@@ -131,21 +131,17 @@ export default function Configuracoes() {
   const planName = (company.planName || '').toLowerCase();
 
   const canUseMultiCurrency = 
-    features.includes('moeda') || 
     features.includes('multi') || 
-    features.includes('completo') || 
-    features.includes('pro') ||
-    features.includes('ilimitado') ||
+    features.includes('moeda') || 
+    planName.includes('pro') ||
     planName.includes('completo') ||
-    planName.includes('pro');
+    features.includes('completo');
 
   const canUseCobradores = 
     features.includes('cobrador') || 
-    features.includes('completo') || 
-    features.includes('pro') ||
-    features.includes('ilimitado') ||
+    planName.includes('pro') ||
     planName.includes('completo') ||
-    planName.includes('pro');
+    features.includes('completo');
 
   const toggleMultiCurrency = () => {
     if (!canUseMultiCurrency && !company.multiCurrency) {

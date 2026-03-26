@@ -777,7 +777,7 @@ CREATE POLICY "Admin can manage settings"
           </div>
 
           {showPlanForm && (
-            <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-white text-sm font-medium">{editPlanId ? 'Editar Plano' : 'Novo Plano'}</p>
                 <button onClick={() => { setShowPlanForm(false); setEditPlanId(null); }} className="text-white/40 hover:text-white"><X size={16} /></button>
@@ -792,35 +792,86 @@ CREATE POLICY "Admin can manage settings"
                   </select>
                 </div>
               </div>
-              <div><label className="text-white/50 text-xs mb-1 block">Recursos</label><input value={planForm.features} onChange={e => setPlanForm(f => ({ ...f, features: e.target.value }))} placeholder="Até 20 usuários, Multi-moeda..." className={inputClass} /></div>
-              <div className="flex justify-end"><button onClick={handleSavePlan} className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:opacity-90 transition-opacity">{editPlanId ? 'Salvar' : 'Criar Plano'}</button></div>
+
+              {/* Advanced Features (Checkboxes) */}
+              <div className="space-y-3 pt-2 border-t border-white/10">
+                <p className="text-white/40 text-[10px] uppercase font-bold tracking-wider">Recursos e Módulos Habilitados</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {[
+                    { id: 'multi', label: 'Gestão Multi-Moedas' },
+                    { id: 'contratos', label: 'Contratos Simplificados' },
+                    { id: 'bancos', label: 'Contas Bancárias' },
+                    { id: 'auditoria', label: 'Módulo de Auditoria' },
+                    { id: 'cobrador', label: 'Cobrador em Tempo Real' },
+                    { id: 'ilimitado', label: 'Clientes Ilimitados' },
+                  ].map(feat => (
+                    <label key={feat.id} className="flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="checkbox" 
+                        checked={planForm.features.toLowerCase().includes(feat.id)}
+                        onChange={e => {
+                          const current = planForm.features.toLowerCase();
+                          let updated = '';
+                          if (e.target.checked) {
+                            updated = current ? `${current}, ${feat.id}` : feat.id;
+                          } else {
+                            updated = current.split(',').map(s => s.trim()).filter(s => s !== feat.id).join(', ');
+                          }
+                          setPlanForm({ ...planForm, features: updated });
+                        }}
+                        className="w-3.5 h-3.5 rounded border-white/20 bg-white/5 text-secondary focus:ring-offset-0 focus:ring-secondary" 
+                      />
+                      <span className="text-white/70 text-xs group-hover:text-white transition-colors">{feat.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <label className="text-white/50 text-xs mb-1 block">Resumo Manual de Recursos (Exibido para o cliente)</label>
+                <input value={planForm.features} onChange={e => setPlanForm(f => ({ ...f, features: e.target.value }))} placeholder="Até 50 usuários, Multi-moeda..." className={inputClass} />
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button onClick={handleSavePlan} className="px-5 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-semibold hover:opacity-90 shadow-lg shadow-secondary/20 transition-all flex items-center gap-2">
+                  <Save size={14} />
+                  {editPlanId ? 'Salvar Alterações' : 'Criar Plano agora'}
+                </button>
+              </div>
             </div>
           )}
 
           <div className="space-y-2">
             {plans.map(p => (
-              <div key={p.id} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-4 py-3">
-                <div>
-                  <p className="text-white text-sm font-medium">{p.name}</p>
-                  <p className="text-white/40 text-xs mt-0.5">{p.features}</p>
+              <div key={p.id} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-5 py-4 hover:bg-white/10 transition-colors group">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-white text-sm font-semibold">{p.name}</p>
+                    {p.name.toLowerCase().includes('pro') && <span className="bg-secondary/20 text-secondary text-[8px] uppercase font-black px-1.5 py-0.5 rounded">Pro</span>}
+                  </div>
+                  <p className="text-white/40 text-xs line-clamp-1">{p.features}</p>
                 </div>
+                <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <p className="text-white font-semibold text-sm">
+                    <p className="text-white font-bold text-sm">
                       {p.currency === 'PYG' ? `₲ ${p.price.toLocaleString('es-PY')}` : p.currency === 'USD' ? `$ ${p.price.toFixed(2)}` : `R$ ${p.price.toFixed(2)}`}
-                      <span className="text-white/40 text-[10px] ml-1">/mês</span>
+                      <span className="text-white/40 text-[10px] font-normal ml-1">/mês</span>
                     </p>
                     {p.annualPrice && (
-                      <p className="text-secondary text-[10px] font-medium">
+                      <p className="text-emerald-400 text-[10px] font-medium">
                         {p.currency === 'PYG' ? `₲ ${p.annualPrice.toLocaleString('es-PY')}` : p.currency === 'USD' ? `$ ${p.annualPrice.toFixed(2)}` : `R$ ${p.annualPrice.toFixed(2)}`}
                         <span className="opacity-60 ml-1">/ano</span>
                       </p>
                     )}
                   </div>
-                  <button onClick={() => { setEditPlanId(p.id); setPlanForm({ name: p.name, price: String(p.price), annualPrice: p.annualPrice ? String(p.annualPrice) : '', currency: p.currency, features: p.features }); setShowPlanForm(true); }}
-                    className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"><Edit2 size={14} /></button>
-                  <button onClick={async () => { await deletePlanSupa(p.id); const pl = await fetchPlans(); setPlans(pl); }}
-                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/40 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditPlanId(p.id); setPlanForm({ name: p.name, price: String(p.price), annualPrice: p.annualPrice ? String(p.annualPrice) : '', currency: p.currency, features: p.features }); setShowPlanForm(true); }}
+                      className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors" title="Editar"><Edit2 size={15} /></button>
+                    <button onClick={async () => { if(confirm('Excluir este plano?')) { await deletePlanSupa(p.id); const pl = await fetchPlans(); setPlans(pl); } }}
+                      className="p-2 rounded-lg hover:bg-red-500/10 text-white/40 hover:text-red-400 transition-colors" title="Excluir"><Trash2 size={15} /></button>
+                  </div>
                 </div>
+              </div>
             ))}
           </div>
         </div>
