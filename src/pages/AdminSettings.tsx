@@ -808,16 +808,24 @@ CREATE POLICY "Admin can manage settings"
                     <label key={feat.id} className="flex items-center gap-2 cursor-pointer group">
                       <input 
                         type="checkbox" 
-                        checked={planForm.features.toLowerCase().includes(feat.id)}
+                        checked={planForm.features.toLowerCase().split(',').map(s => s.trim()).includes(feat.id)}
                         onChange={e => {
-                          const current = planForm.features.toLowerCase();
-                          let updated = '';
-                          if (e.target.checked) {
-                            updated = current ? `${current}, ${feat.id}` : feat.id;
-                          } else {
-                            updated = current.split(',').map(s => s.trim()).filter(s => s !== feat.id).join(', ');
-                          }
-                          setPlanForm({ ...planForm, features: updated });
+                          const isChecked = e.target.checked;
+                          setPlanForm(prev => {
+                            const current = prev.features.toLowerCase();
+                            const featuresList = current.split(',').map(s => s.trim()).filter(Boolean);
+                            let newList;
+                            if (isChecked) {
+                              if (!featuresList.includes(feat.id)) {
+                                newList = [...featuresList, feat.id];
+                              } else {
+                                newList = featuresList;
+                              }
+                            } else {
+                              newList = featuresList.filter(s => s !== feat.id);
+                            }
+                            return { ...prev, features: newList.join(', ') };
+                          });
                         }}
                         className="w-3.5 h-3.5 rounded border-white/20 bg-white/5 text-secondary focus:ring-offset-0 focus:ring-secondary" 
                       />
