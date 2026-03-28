@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { useAuth } from '@/hooks/useAuth';
-import { Transaction, Client, BankAccount } from '@/types';
+import { Transaction, Client, BankAccount, Currency } from '@/types';
 import { updateData, addData, getAppData } from '@/services/storageService';
 import { formatCurrency, formatDate, getStatusColor } from '@/utils/formatters';
 import { useSyncToast } from '@/hooks/useSyncToast';
@@ -109,10 +109,10 @@ export default function AreaCobrador() {
         });
         await updateData('bankAccounts', targetMainCaixa.id, { currentBalance: targetMainCaixa.currentBalance + conv.convertedAmount } as any);
         
-        // Log
+        // Log do Fechamento
         await addData('auditLogs', {
           id: crypto.randomUUID(),
-          action: 'transferencia',
+          action: 'fechamento_caixa',
           transactionDescription: `Definitivo de: ${caixa.name} para ${targetMainCaixa.name}`,
           amount: amountToTransfer,
           currency: caixa.currency,
@@ -607,7 +607,7 @@ export default function AreaCobrador() {
               <div className="bg-card rounded-lg p-4 border border-border border-dashed">
                 <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Total Arrecadado (Bruto)</p>
                 {Object.entries(groupedCash.cash).map(([cur, amount]) => (
-                  <p key={cur} className="font-semibold text-sm mb-1">{formatCurrency(amount, cur)}</p>
+                  <p key={cur} className="font-semibold text-sm mb-1">{formatCurrency(amount, cur as Currency)}</p>
                 ))}
                 {Object.keys(groupedCash.cash).length === 0 && <p className="text-sm font-medium">Nenhum valor em espécie</p>}
               </div>
@@ -615,7 +615,7 @@ export default function AreaCobrador() {
               <div className="bg-card rounded-lg p-4 border border-border border-dashed">
                 <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Total Sangrias (Despesas)</p>
                 {Object.entries(groupedSangrias).map(([cur, amount]) => (
-                  <p key={cur} className="font-semibold text-sm text-warning mb-1">-{formatCurrency(amount, cur)}</p>
+                  <p key={cur} className="font-semibold text-sm text-warning mb-1">-{formatCurrency(amount, cur as Currency)}</p>
                 ))}
                 {Object.keys(groupedSangrias).length === 0 && <p className="text-sm font-medium">Nenhuma sangria</p>}
               </div>
@@ -655,7 +655,7 @@ export default function AreaCobrador() {
                   return (
                     <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
                       <p className="font-medium text-xs">{acc?.name || 'Conta não identificada'}</p>
-                      <p className="font-bold text-sm">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
+                      <p className="font-bold text-sm">{formatCurrency(amount, (acc?.currency as Currency) || 'BRL')}</p>
                     </div>
                   );
                 })}
@@ -673,7 +673,7 @@ export default function AreaCobrador() {
                   return (
                     <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
                       <p className="font-medium text-xs">{acc?.name || 'Conta não identificada'}</p>
-                      <p className="font-bold text-sm">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
+                      <p className="font-bold text-sm">{formatCurrency(amount, (acc?.currency as Currency) || 'BRL')}</p>
                     </div>
                   );
                 })}
@@ -693,7 +693,7 @@ export default function AreaCobrador() {
                   return (
                     <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
                       <p className="font-medium text-xs">{acc?.name || 'Conta não identificada'}</p>
-                      <p className="font-bold text-sm">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
+                      <p className="font-bold text-sm">{formatCurrency(amount, (acc?.currency as Currency) || 'BRL')}</p>
                     </div>
                   );
                 })}
@@ -833,7 +833,7 @@ export default function AreaCobrador() {
                 >
                   <option value="" disabled>Selecione a conta destino...</option>
                   {bankAccounts
-                    .filter(a => paymentMethod === 'dinheiro' ? a.accountType === 'caixa' : a.accountType !== 'caixa')
+                    .filter(a => paymentMethod === 'dinheiro' ? myCaixas.some(mc => mc.id === a.id) : a.accountType !== 'caixa')
                     .map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
                   ))}
@@ -898,9 +898,6 @@ export default function AreaCobrador() {
                 >
                   <option value="" disabled>Selecione a conta...</option>
                   {bankAccounts.filter(a => a.accountType === 'caixa' && a.name.includes(cobrador.name)).map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
-                  ))}
-                  {bankAccounts.filter(a => a.accountType === 'caixa' && !a.name.includes(cobrador.name)).map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
                   ))}
                 </select>
