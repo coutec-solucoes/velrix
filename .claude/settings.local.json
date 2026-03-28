@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(wc -l src/pages/*.tsx)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(find 'e:\\\\SISTEMA PROJETO\\\\VELTOR FINANCE\\\\veltorfinance-main' -type f -name useAuth*)"
     ]
   }
 }

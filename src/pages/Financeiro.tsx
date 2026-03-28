@@ -998,7 +998,15 @@ export default function Financeiro() {
                   <label className="block text-body-sm font-medium mb-1">{t('fin_category')}</label>
                   <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={inputClass}>
                     <option value="">{t('fin_select')}</option>
-                    {categories.filter((c) => c.type === form.type).map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    {(() => {
+                      const filtered = categories.filter((c) => c.type === form.type);
+                      const list = filtered.length > 0 ? filtered : categories;
+                      return list.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}{filtered.length === 0 && c.type ? ` (${c.type === 'income' ? 'Receita' : 'Despesa'})` : ''}
+                        </option>
+                      ));
+                    })()}
                   </select>
                 </div>
                 {/* Searchable client dropdown */}

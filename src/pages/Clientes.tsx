@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { addData, updateData, deleteData, getAppData } from '@/services/storageService';
+import { addData, updateData, deleteData, getAppData, onDataChange } from '@/services/storageService';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { Currency, Client, Transaction, BankAccount, Contract } from '@/types';
 import { formatCurrency, formatDate, getCountryFlag, getDocumentLabel, getStatusColor } from '@/utils/formatters';
@@ -118,6 +118,16 @@ export default function Clientes() {
   const load = () => { refreshClients(); };
   const [saving, setSaving] = useState(false);
   const { showSyncResult } = useSyncToast();
+
+  // Reactive cobradoresEnabled — updates whenever company settings change
+  const [cobradoresEnabled, setCobradoresEnabled] = useState(() => getAppData().settings?.cobradoresEnabled ?? false);
+  useEffect(() => {
+    setCobradoresEnabled(getAppData().settings?.cobradoresEnabled ?? false);
+    const unsub = onDataChange(() => {
+      setCobradoresEnabled(getAppData().settings?.cobradoresEnabled ?? false);
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -518,7 +528,7 @@ export default function Clientes() {
                 </div>
               </div>
 
-              {getAppData().settings?.cobradoresEnabled && (
+              {cobradoresEnabled && (
                 <div>
                   <label className="block text-body-sm font-medium mb-1">Cobrador</label>
                   <select value={form.cobradorId || ''} onChange={(e) => setForm({ ...form, cobradorId: e.target.value })} className={inputClass}>

@@ -34,6 +34,7 @@ export function useRealtimeData<K extends keyof AppData>(key: K): [AppData[K], (
       users: 'users', clients: 'clients', transactions: 'transactions',
       contracts: 'contracts', categories: 'categories',
       bankAccounts: 'bank_accounts', cashMovements: 'cash_movements', auditLogs: 'audit_logs',
+      cobradores: 'cobradores', exchangeRateHistory: 'exchange_rate_history',
     };
     const unsubscribe = onDataChange((changedTable) => {
       if (!changedTable || changedTable === tableMap[key as string] || changedTable === 'companies') {
