@@ -185,22 +185,15 @@ export default function AreaCobrador() {
     handlePrintFechamento();
   };
 
-  if (!getAppData().settings?.cobradoresEnabled) {
-    return <div className="p-8 text-center bg-card rounded-lg mt-10">Módulo de cobradores está desativado.</div>;
-  }
-
-  if (!cobrador) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8 bg-card rounded-lg border border-border mt-10 max-w-md mx-auto">
-        <h2 className="text-title-section font-semibold mb-2">Acesso Restrito</h2>
-        <p className="text-muted-foreground text-center">Seu usuário não está vinculado a um perfil de Cobrador ativo. Contate o administrador.</p>
-      </div>
-    );
-  }
-
-  // Calculate stats for fechamento
-  const paidTodayTxs = transactions.filter(t => t.cobradorId === cobrador.id && t.paidAt === fechamentoDate && t.status === 'pago');
-  const totalPaidToday = paidTodayTxs.reduce((sum, tx) => sum + tx.amount, 0);
+  // Hooks must be called unconditionally
+  const paidTodayTxs = useMemo(() => {
+    if (!cobrador) return [];
+    return transactions.filter(t => t.cobradorId === cobrador.id && t.paidAt === fechamentoDate && t.status === 'pago');
+  }, [transactions, cobrador, fechamentoDate]);
+  
+  const totalPaidToday = useMemo(() => {
+    return paidTodayTxs.reduce((sum, tx) => sum + tx.amount, 0);
+  }, [paidTodayTxs]);
 
   // Group by Method / Currency / BankAccount for specific reporting
   const groupedCash = useMemo(() => {
@@ -236,6 +229,19 @@ export default function AreaCobrador() {
     if (method === 'cartao_debito') return 'Cartão de Débito';
     return method || 'Dinheiro';
   };
+
+  if (!getAppData().settings?.cobradoresEnabled) {
+    return <div className="p-8 text-center bg-card rounded-lg mt-10">Módulo de cobradores está desativado.</div>;
+  }
+
+  if (!cobrador) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 bg-card rounded-lg border border-border mt-10 max-w-md mx-auto">
+        <h2 className="text-title-section font-semibold mb-2">Acesso Restrito</h2>
+        <p className="text-muted-foreground text-center">Seu usuário não está vinculado a um perfil de Cobrador ativo. Contate o administrador.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">

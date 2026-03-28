@@ -1317,6 +1317,37 @@ BEGIN
 END;
 $$;`,
   },
+  {
+    name: 'grant_cobrador_permissions',
+    description: 'Permitir que cobradores baixem parcelas',
+    sql: `
+-- Atualizar transações
+DROP POLICY IF EXISTS "Can update transactions for own company" ON transactions;
+CREATE POLICY "Can update transactions for own company"
+  ON transactions FOR UPDATE TO authenticated
+  USING (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'))
+  WITH CHECK (company_id = public.get_user_company_id());
+
+-- Atualizar contas bancárias
+DROP POLICY IF EXISTS "Can update bank_accounts for own company" ON bank_accounts;
+CREATE POLICY "Can update bank_accounts for own company"
+  ON bank_accounts FOR UPDATE TO authenticated
+  USING (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'))
+  WITH CHECK (company_id = public.get_user_company_id());
+
+-- Inserir movimentações de caixa
+DROP POLICY IF EXISTS "Can insert cash_movements for own company" ON cash_movements;
+CREATE POLICY "Can insert cash_movements for own company"
+  ON cash_movements FOR INSERT TO authenticated
+  WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'));
+
+-- Inserir logs de auditoria
+DROP POLICY IF EXISTS "Can insert audit_logs for own company" ON audit_logs;
+CREATE POLICY "Can insert audit_logs for own company"
+  ON audit_logs FOR INSERT TO authenticated
+  WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'));
+    `,
+  },
 ];
 
 /**
