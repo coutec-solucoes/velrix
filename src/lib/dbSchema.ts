@@ -173,6 +173,13 @@ BEGIN
   u_email := auth.jwt()->>'email';
   u_name := COALESCE(auth.jwt()->'user_metadata'->>'name', '');
 
+  -- Colaboradores têm empresa gerenciada pela Edge Function authenticate-collaborator.
+  -- Não criar empresa aqui para evitar sobreposição do company_id correto.
+  IF (auth.jwt()->'user_metadata'->>'is_collaborator')::boolean IS TRUE THEN
+    SELECT company_id INTO new_company_id FROM public.profiles WHERE id = u_id;
+    RETURN json_build_object('success', true, 'company_id', new_company_id);
+  END IF;
+
   SELECT EXISTS(SELECT 1 FROM public.profiles WHERE id = u_id) INTO p_exists;
 
   IF NOT p_exists THEN
@@ -182,25 +189,25 @@ BEGIN
 
   -- Verifica se tem empresa vinculada
   SELECT company_id, role INTO new_company_id, p_role FROM public.profiles WHERE id = u_id;
-  
+
   IF new_company_id IS NULL THEN
     -- Busca por email em saas_companies (para proprietários que perderam o vínculo)
     SELECT id INTO new_company_id FROM public.saas_companies WHERE contact_email = u_email LIMIT 1;
-    
+
     IF new_company_id IS NOT NULL THEN
       UPDATE public.profiles SET company_id = new_company_id WHERE id = u_id;
     ELSE
       -- Cria nova empresa se for um usuário orfão (ou recém-criado sem trigger)
       new_company_id := gen_random_uuid();
-      
+
       INSERT INTO public.saas_companies (id, name, contact_email, contact_name, status)
       VALUES (new_company_id, COALESCE(NULLIF(u_name, ''), 'Empresa de ' || u_email), u_email, u_name, 'pendente')
       ON CONFLICT (id) DO NOTHING;
-      
+
       INSERT INTO public.companies (id, name, email)
       VALUES (new_company_id, COALESCE(NULLIF(u_name, ''), 'Empresa de ' || u_email), u_email)
       ON CONFLICT (id) DO NOTHING;
-      
+
       UPDATE public.profiles SET company_id = new_company_id WHERE id = u_id;
     END IF;
   END IF;
@@ -242,6 +249,12 @@ DECLARE
   new_company_id UUID;
   account_type_value TEXT;
 BEGIN
+  -- Colaboradores já têm perfil e empresa gerenciados pela Edge Function authenticate-collaborator.
+  -- Criar uma empresa nova aqui causaria conflito: o trigger sobrescreveria o company_id correto.
+  IF (NEW.raw_user_meta_data->>'is_collaborator')::boolean IS TRUE THEN
+    RETURN NEW;
+  END IF;
+
   account_type_value := COALESCE(NEW.raw_user_meta_data->>'account_type', 'pessoal');
 
   INSERT INTO public.profiles (id, name, email, country, account_type, company_name, document, phone, plan_id)
