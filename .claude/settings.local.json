@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(wc -l src/pages/*.tsx)"
+      "Bash(wc -l src/pages/*.tsx)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

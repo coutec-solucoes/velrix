@@ -7,6 +7,9 @@ import { getAppData, onRealtimeStatusChange, getRealtimeStatus, onContractSigned
 import { getData } from '@/services/storageService';
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
+import { useNotifications } from '@/hooks/useNotifications';
+import NotificationCenter from '@/components/NotificationCenter';
+import { useRealtimeData } from '@/hooks/useRealtimeData';
 import {
   LayoutDashboard,
   DollarSign,
@@ -63,6 +66,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const currentMenuItem = menuItems.find((i) => i.path === location.pathname);
   const [appData, setAppData] = useState(getAppData());
   const [rtStatus, setRtStatus] = useState<RealtimeStatus>(getRealtimeStatus());
+  const [transactions] = useRealtimeData('transactions');
+  const [bankAccounts] = useRealtimeData('bankAccounts');
+  const notifications = useNotifications(transactions, bankAccounts, appData.settings ?? null);
 
   useEffect(() => {
     const unsubStatus = onRealtimeStatusChange(setRtStatus);
@@ -281,6 +287,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            {/* Notification center */}
+            <NotificationCenter notifications={notifications} />
             {/* Realtime status indicator */}
             <div
               className={cn(

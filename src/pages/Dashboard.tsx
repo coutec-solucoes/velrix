@@ -7,6 +7,8 @@ import { useTranslation } from '@/hooks/useI18n';
 import { LayoutGrid, Columns, Rows3, Calendar } from 'lucide-react';
 import CurrencySummarySection from '@/components/dashboard/CurrencySummarySection';
 import ConsolidatedSummary from '@/components/dashboard/ConsolidatedSummary';
+import DashboardCharts from '@/components/dashboard/DashboardCharts';
+import CashFlowForecast from '@/components/dashboard/CashFlowForecast';
 import TrialBanner from '@/components/TrialBanner';
 
 type PeriodFilter = 'month' | 'quarter' | 'year' | 'all';
@@ -180,6 +182,21 @@ export default function Dashboard() {
             compact={viewMode === 'compact'}
           />
         ))}
+      </div>
+
+      {/* Charts & Forecast — always shown below the summary cards */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <DashboardCharts
+          transactions={filteredTransactions}
+          primaryCurrency={primaryCurrency}
+          categories={data.categories}
+          t={t}
+        />
+        <CashFlowForecast
+          transactions={transactions}
+          bankAccounts={bankAccounts}
+          primaryCurrency={primaryCurrency}
+        />
       </div>
     </div>
   );
