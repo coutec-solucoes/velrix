@@ -113,8 +113,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     if (module === 'contratos') return features.includes('contratos');
     if (module === 'auditoria') return features.includes('auditoria');
     if (module === 'contasBancarias') return features.includes('bancos');
-    
-    return true; 
+
+    return true;
   };
 
   const visibleMenuItems = useMemo(() => {
