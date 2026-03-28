@@ -5,8 +5,9 @@ import { Transaction, Client, BankAccount } from '@/types';
 import { updateData, addData, getAppData } from '@/services/storageService';
 import { formatCurrency, formatDate, getStatusColor } from '@/utils/formatters';
 import { useSyncToast } from '@/hooks/useSyncToast';
-import { CheckCircle, Clock, CheckSquare, Square, Search, X, Loader2, Calendar, ClipboardList } from 'lucide-react';
+import { CheckCircle, Clock, CheckSquare, Square, Search, X, Loader2, Calendar, ClipboardList, Wallet, Landmark, CreditCard, Banknote, QrCode, Printer } from 'lucide-react';
 import ReceiptPrint, { ReceiptData } from '@/components/ReceiptPrint';
+import { convertAmount, conversionDescription } from '@/utils/currencyConversion';
 
 export default function AreaCobrador() {
   const { user } = useAuth();
@@ -25,6 +26,17 @@ export default function AreaCobrador() {
 
   // Fechamento stats
   const [fechamentoDate, setFechamentoDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Baixa Modal state
+  const [showBaixaModal, setShowBaixaModal] = useState(false);
+  const [baixaTx, setBaixaTx] = useState<Transaction | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState('dinheiro');
+  const [bankAccountId, setBankAccountId] = useState('');
+
+  // Print Ref
+  const handlePrintFechamento = () => {
+    window.print();
+  };
 
   // Find the cobrador entity for the logged in user
   const cobrador = useMemo(() => cobradores.find(c => c.userId === user?.id), [cobradores, user]);
@@ -51,27 +63,73 @@ export default function AreaCobrador() {
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   }, [selectedClient, transactions]);
 
-  const handleBaixa = async (tx: Transaction) => {
-    if (!confirm(`Confirmar recebimento de ${formatCurrency(tx.amount, tx.currency)}?`)) return;
-    
+  const handleBaixaClick = (tx: Transaction) => {
+    setBaixaTx(tx);
+    setPaymentMethod('dinheiro');
+    // Default to a bank account of type 'caixa' if found
+    const caixaAccount = bankAccounts.find(a => a.accountType === 'caixa');
+    if (caixaAccount) {
+      setBankAccountId(caixaAccount.id);
+    } else {
+      setBankAccountId('');
+    }
+    setShowBaixaModal(true);
+  };
+
+  const confirmBaixa = async () => {
+    if (!baixaTx) return;
     setSaving(true);
     try {
       const date = new Date().toISOString().split('T')[0];
-      await updateData('transactions', tx.id, {
+      await updateData('transactions', baixaTx.id, {
         status: 'pago',
         paidAt: date,
-        cobradorId: cobrador?.id // record that this cobrador received it
+        paymentMethod: paymentMethod,
+        bankAccountId: bankAccountId || undefined,
+        cobradorId: cobrador?.id
       } as any);
+
+      if (bankAccountId) {
+        const acc = bankAccounts.find(a => a.id === bankAccountId);
+        const movType = (baixaTx.type === 'receita' || baixaTx.type === 'investimento') ? 'entrada' : 'saida';
+        const conv = acc ? convertAmount(baixaTx.amount, baixaTx.currency, acc.currency) : null;
+        const movAmount = conv ? conv.convertedAmount : baixaTx.amount;
+        const movCurrency = acc ? acc.currency : baixaTx.currency;
+        const convDesc = conv && conv.wasConverted ? conversionDescription(conv) : '';
+
+        await addData('cashMovements', {
+          id: crypto.randomUUID(),
+          transactionId: baixaTx.id,
+          bankAccountId: bankAccountId,
+          type: movType,
+          amount: movAmount,
+          currency: movCurrency,
+          description: `Baixa (Cobrador): ${baixaTx.description}${convDesc}`,
+          date: date,
+          userId: user?.id,
+          userName: user?.name || cobrador?.name,
+          createdAt: new Date().toISOString(),
+        });
+        if (acc) {
+          const delta = movType === 'entrada' ? movAmount : -movAmount;
+          await updateData('bankAccounts', acc.id, { currentBalance: acc.currentBalance + delta } as any);
+        }
+      }
+
+      const acc = bankAccounts.find(a => a.id === bankAccountId);
+      const auditConv = acc ? convertAmount(baixaTx.amount, baixaTx.currency, acc.currency) : null;
 
       await addData('auditLogs', {
         id: crypto.randomUUID(),
-        action: (tx.type === 'receita' || tx.type === 'investimento') ? 'baixa_recebimento' : 'baixa_pagamento',
-        transactionId: tx.id,
-        transactionDescription: tx.description,
-        clientId: tx.clientId || '',
+        action: (baixaTx.type === 'receita' || baixaTx.type === 'investimento') ? 'baixa_recebimento' : 'baixa_pagamento',
+        transactionId: baixaTx.id,
+        transactionDescription: baixaTx.description + (auditConv?.wasConverted ? conversionDescription(auditConv) : ''),
+        clientId: baixaTx.clientId || '',
         clientName: selectedClient?.name || '',
-        amount: tx.amount,
-        currency: tx.currency,
+        amount: baixaTx.amount,
+        currency: baixaTx.currency,
+        bankAccountId: bankAccountId || '',
+        bankAccountName: acc?.name || '',
         userId: user?.id || '',
         userName: user?.name || '',
         date: date,
@@ -82,12 +140,13 @@ export default function AreaCobrador() {
       showSyncResult({ success: true, localOnly: false }, 'Baixa realizada com sucesso');
       
       setReceiptData({
-        transaction: { ...tx, status: 'pago', paidAt: date, cobradorId: cobrador?.id } as Transaction,
+        transaction: { ...baixaTx, status: 'pago', paidAt: date, cobradorId: cobrador?.id, paymentMethod, bankAccountId } as Transaction,
         client: selectedClient || null,
-        bankAccount: null,
+        bankAccount: acc || null,
         paidDate: date,
-        userName: user?.name || '',
+        userName: user?.name || cobrador?.name || '',
       });
+      setShowBaixaModal(false);
     } finally {
       setSaving(false);
     }
@@ -97,7 +156,6 @@ export default function AreaCobrador() {
     const newDateStr = prompt('Informe a nova data de vencimento (YYYY-MM-DD):', tx.dueDate);
     if (!newDateStr) return;
     
-    // basic validation
     if (!newDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
       alert('Formato de data inválido. Use YYYY-MM-DD.');
       return;
@@ -115,14 +173,8 @@ export default function AreaCobrador() {
     }
   };
 
-  // Fechamento da cobrança
   const fecharCobrança = () => {
-    if (!cobrador) return;
-    const txsHoje = transactions.filter(t => t.cobradorId === cobrador.id && t.paidAt === fechamentoDate && t.status === 'pago');
-    
-    const total = txsHoje.reduce((sum, tx) => sum + tx.amount, 0);
-    // In real app we might send an email, create a consolidated "Fechamento" record, or just print it.
-    alert(`Fechamento do dia ${formatDate(fechamentoDate)}\n\nTotal Recebido: ${formatCurrency(total, 'BRL')}\nQuantidade: ${txsHoje.length} parcelas.\n\nPreste contas com o financeiro informando este valor.`);
+    handlePrintFechamento();
   };
 
   if (!getAppData().settings?.cobradoresEnabled) {
@@ -141,6 +193,41 @@ export default function AreaCobrador() {
   // Calculate stats for fechamento
   const paidTodayTxs = transactions.filter(t => t.cobradorId === cobrador.id && t.paidAt === fechamentoDate && t.status === 'pago');
   const totalPaidToday = paidTodayTxs.reduce((sum, tx) => sum + tx.amount, 0);
+
+  // Group by Method / Currency / BankAccount for specific reporting
+  const groupedCash = useMemo(() => {
+    const cash: Record<string, number> = {};
+    const pix: Record<string, number> = {};
+    const cards: Record<string, number> = {};
+
+    paidTodayTxs.forEach(tx => {
+      const method = tx.paymentMethod || 'dinheiro';
+      const isDinheiro = method === 'dinheiro';
+      const isCard = method === 'cartao_credito' || method === 'cartao_debito';
+
+      if (isDinheiro) {
+        const key = tx.currency;
+        cash[key] = (cash[key] || 0) + tx.amount;
+      } else if (isCard) {
+        const accId = tx.bankAccountId || 'n/a';
+        cards[accId] = (cards[accId] || 0) + tx.amount;
+      } else {
+        const accId = tx.bankAccountId || 'n/a';
+        pix[accId] = (pix[accId] || 0) + tx.amount;
+      }
+    });
+
+    return { cash, pix, cards };
+  }, [paidTodayTxs]);
+
+  const paymentMethodLabel = (method?: string) => {
+    if (method === 'dinheiro') return 'Dinheiro';
+    if (method === 'pix') return 'PIX';
+    if (method === 'transferencia_bancaria') return 'Transferência';
+    if (method === 'cartao_credito') return 'Cartão de Crédito';
+    if (method === 'cartao_debito') return 'Cartão de Débito';
+    return method || 'Dinheiro';
+  };
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
@@ -241,7 +328,7 @@ export default function AreaCobrador() {
 
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleBaixa(tx)}
+                          onClick={() => handleBaixaClick(tx)}
                           disabled={saving}
                           className="flex-1 inline-flex justify-center items-center gap-2 bg-success text-success-foreground py-2 px-3 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
                         >
@@ -279,54 +366,111 @@ export default function AreaCobrador() {
       )}
 
       {activeTab === 'fechamento' && (
-        <div className="bg-card rounded-lg border border-border p-6 max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-card rounded-lg border border-border p-6 max-w-2xl mx-auto print:shadow-none print:border-none print:p-0">
+          <div className="flex items-center justify-between mb-6 print:hidden">
             <h2 className="text-title-section font-semibold">Fechamento de Caixa</h2>
-            <input 
-              type="date" 
-              value={fechamentoDate} 
-              onChange={e => setFechamentoDate(e.target.value)}
-              className="border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none"
-            />
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={fechamentoDate} 
+                onChange={e => setFechamentoDate(e.target.value)}
+                className="border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none"
+              />
+              <button
+                onClick={handlePrintFechamento}
+                disabled={paidTodayTxs.length === 0}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background text-body-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+                title="Imprimir Fechamento"
+              >
+                <Printer size={16} /> <span className="hidden sm:inline">Imprimir</span>
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-success/10 rounded-xl p-5 border border-success/20">
-              <p className="text-success text-sm font-medium">Total Recebido</p>
-              <p className="text-2xl font-bold text-success mt-1">{formatCurrency(totalPaidToday, 'BRL')}</p>
-            </div>
-            <div className="bg-secondary/10 rounded-xl p-5 border border-secondary/20">
-              <p className="text-secondary text-sm font-medium">Parcelas Baixadas</p>
-              <p className="text-2xl font-bold text-secondary mt-1">{paidTodayTxs.length}</p>
+          <div className="hidden print:block text-center mb-6">
+            <h1 className="text-xl font-bold uppercase">{getAppData().settings?.companyName || 'Prestação de Contas'}</h1>
+            <p className="text-sm">Cobrador: {cobrador.name}</p>
+            <p className="text-sm">Data: {formatDate(fechamentoDate)}</p>
+          </div>
+
+          <div className="mb-6 border-b border-border pb-6">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Banknote size={18} /> Resumo Físico (Dinheiro em Espécie)</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {Object.entries(groupedCash.cash).map(([currency, amount]) => (
+                <div key={currency} className="bg-card rounded-lg p-4 border border-border card-shadow align-middle">
+                  <p className="text-sm text-muted-foreground font-medium uppercase">{currency}</p>
+                  <p className="text-xl font-bold">{formatCurrency(amount, currency as any)}</p>
+                </div>
+              ))}
+              {Object.keys(groupedCash.cash).length === 0 && (
+                <p className="text-muted-foreground text-sm py-2 col-span-2">Nenhum recebimento em Dinheiro hoje.</p>
+              )}
             </div>
           </div>
+
+          <div className="mb-6 border-b border-border pb-6">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><QrCode size={18} /> PIX e Bancos Diferidos</h3>
+            <div className="space-y-3">
+              {Object.entries(groupedCash.pix).map(([accId, amount]) => {
+                const acc = bankAccounts.find(a => a.id === accId);
+                return (
+                  <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
+                    <p className="font-medium text-sm">{acc?.name || 'Conta não identificada'}</p>
+                    <p className="font-bold">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
+                  </div>
+                );
+              })}
+              {Object.keys(groupedCash.pix).length === 0 && (
+                <p className="text-muted-foreground text-sm py-2">Nenhum recebimento via digital hoje.</p>
+              )}
+            </div>
+          </div>
+
+          {Object.keys(groupedCash.cards).length > 0 && (
+            <div className="mb-6 border-b border-border pb-6">
+              <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><CreditCard size={18} /> Cartões</h3>
+              <div className="space-y-3">
+                {Object.entries(groupedCash.cards).map(([accId, amount]) => {
+                  const acc = bankAccounts.find(a => a.id === accId);
+                  return (
+                    <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
+                      <p className="font-medium text-sm">{acc?.name || 'Conta não identificada'}</p>
+                      <p className="font-bold">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-4 mb-8">
-            <h3 className="font-medium border-b border-border pb-2">Detalhamento ({formatDate(fechamentoDate)})</h3>
+            <h3 className="font-medium border-b border-border pb-2 text-lg">Detalhamento das Parcelas</h3>
             {paidTodayTxs.map(tx => {
               const client = clients.find(c => c.id === tx.clientId);
               return (
                 <div key={tx.id} className="flex justify-between items-center text-sm py-2 border-b border-border border-dashed last:border-0">
                   <div>
                     <p className="font-medium">{client?.name || 'Cliente Removido'}</p>
-                    <p className="text-xs text-muted-foreground">{tx.description}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-muted-foreground">{tx.description}</p>
+                      <span className="text-[10px] font-semibold bg-secondary/10 text-secondary px-1.5 py-0.5 rounded-full uppercase">
+                        {paymentMethodLabel(tx.paymentMethod)}
+                      </span>
+                    </div>
                   </div>
                   <p className="font-semibold text-success">{formatCurrency(tx.amount, tx.currency)}</p>
                 </div>
               );
             })}
             {paidTodayTxs.length === 0 && (
-              <p className="text-muted-foreground text-sm text-center py-4">Nenhum recebimento registrado nesta data.</p>
+              <p className="text-muted-foreground text-sm text-center py-4 border border-border border-dashed rounded-lg">Nenhum recebimento registrado nesta data.</p>
             )}
           </div>
 
-          <button
-            onClick={fecharCobrança}
-            disabled={paidTodayTxs.length === 0}
-            className="w-full bg-secondary text-secondary-foreground py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
-          >
-            <CheckSquare size={20} /> Fechar Expediente
-          </button>
+          <div className="hidden print:block mt-12 pt-12 border-t border-border border-dashed text-center">
+            <div className="w-64 mx-auto border-b border-black mb-2"></div>
+            <p className="text-sm font-medium">Assinatura do Cobrador ({cobrador.name})</p>
+          </div>
         </div>
       )}
 
@@ -335,6 +479,111 @@ export default function AreaCobrador() {
           receipt={receiptData}
           onClose={() => setReceiptData(null)}
         />
+      )}
+
+      {showBaixaModal && baixaTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in print:hidden">
+          <div className="bg-card w-full max-w-md rounded-xl card-shadow border border-border animate-scale-in">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="text-title-sm font-bold">Confirmar Pagamento</h2>
+              <button onClick={() => setShowBaixaModal(false)} className="p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors hover:bg-accent rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="p-4 bg-muted/50 rounded-lg border border-border">
+                <p className="text-sm font-medium mb-1">{selectedClient?.name}</p>
+                <div className="flex justify-between items-center">
+                  <p className="text-muted-foreground text-sm">{baixaTx.description}</p>
+                  <p className="text-lg font-bold text-success">{formatCurrency(baixaTx.amount, baixaTx.currency)}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Forma de Pagamento</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('dinheiro')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-colors ${
+                      paymentMethod === 'dinheiro' ? 'border-secondary bg-secondary/10 text-secondary' : 'border-border hover:bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    <Banknote size={20} className="mb-1" />
+                    <span className="text-xs font-semibold">Dinheiro</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('pix')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-colors ${
+                      paymentMethod === 'pix' ? 'border-secondary bg-secondary/10 text-secondary' : 'border-border hover:bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    <QrCode size={20} className="mb-1" />
+                    <span className="text-xs font-semibold">PIX</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('cartao_credito')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-colors ${
+                      paymentMethod === 'cartao_credito' ? 'border-secondary bg-secondary/10 text-secondary' : 'border-border hover:bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    <CreditCard size={20} className="mb-1" />
+                    <span className="text-xs font-semibold">Cartão Cr.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('transferencia_bancaria')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-colors ${
+                      paymentMethod === 'transferencia_bancaria' ? 'border-secondary bg-secondary/10 text-secondary' : 'border-border hover:bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    <Landmark size={20} className="mb-1" />
+                    <span className="text-xs font-semibold">Bancário</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-foreground">
+                  Recebido em (Conta) <span className="text-destructive">*</span>
+                </label>
+                <select 
+                  value={bankAccountId} 
+                  onChange={(e) => setBankAccountId(e.target.value)}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
+                >
+                  <option value="" disabled>Selecione a conta destino...</option>
+                  {bankAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
+                  ))}
+                </select>
+                {paymentMethod === 'dinheiro' && bankAccounts.some(a => a.accountType === 'caixa') && (
+                  <p className="text-xs text-muted-foreground mt-1">Sugerido: Conta classificada como Caixa Físico.</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex gap-2 p-4 border-t border-border bg-muted/30">
+              <button 
+                type="button" 
+                onClick={() => setShowBaixaModal(false)}
+                className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-accent transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                onClick={confirmBaixa}
+                disabled={saving || !bankAccountId}
+                className="flex-1 px-4 py-2 bg-success text-success-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {saving ? 'Confirmando...' : 'Confirmar e Receber'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
