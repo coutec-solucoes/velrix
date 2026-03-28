@@ -150,7 +150,7 @@ export default function AreaCobrador() {
     if (!selectedClient) return [];
     return transactions
       .filter(tx => tx.clientId === selectedClient.id && tx.status !== 'pago')
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }, [selectedClient, transactions]);
 
   const handleBaixaClick = (tx: Transaction) => {
