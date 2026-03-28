@@ -10,11 +10,11 @@ import autoTable from 'jspdf-autotable';
 import {
   FileText, Users, Truck, Landmark, DollarSign, BookOpen,
   Download, Calendar, ArrowUpRight, ArrowDownRight,
-  TrendingUp, TrendingDown, Printer,
+  TrendingUp, TrendingDown, Printer, Route,
 } from 'lucide-react';
 import { convertAmount } from '@/utils/currencyConversion';
 
-type ReportTab = 'clientes' | 'fornecedores' | 'financeiro' | 'caixa' | 'bancos';
+type ReportTab = 'clientes' | 'fornecedores' | 'financeiro' | 'caixa' | 'bancos' | 'fechamentos';
 
 const tabs: { key: ReportTab; label: string; icon: any }[] = [
   { key: 'clientes', label: 'Clientes', icon: Users },
@@ -22,6 +22,7 @@ const tabs: { key: ReportTab; label: string; icon: any }[] = [
   { key: 'financeiro', label: 'Financeiro', icon: DollarSign },
   { key: 'caixa', label: 'Caixa', icon: BookOpen },
   { key: 'bancos', label: 'Contas Bancárias', icon: Landmark },
+  { key: 'fechamentos', label: 'Fechamentos', icon: Route },
 ];
 
 const currencyLabelPdf: Record<string, string> = { BRL: '[BRL]', PYG: '[PYG]', USD: '[USD]' };
@@ -136,6 +137,7 @@ export default function Relatorios() {
   const [bankAccounts] = useRealtimeData('bankAccounts');
   const [cashMovements] = useRealtimeData('cashMovements');
   const [cobradores] = useRealtimeData('cobradores');
+  const [auditLogs] = useRealtimeData('auditLogs');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [cobradorId, setCobradorId] = useState('');
@@ -211,6 +213,7 @@ export default function Relatorios() {
       {activeTab === 'financeiro' && <FinanceiroReport transactions={applyFilters(transactions)} clients={clients} dateFrom={dateFrom} dateTo={dateTo} />}
       {activeTab === 'caixa' && <CaixaReport movements={applyFilters(cashMovements)} transactions={transactions} bankAccounts={bankAccounts} dateFrom={dateFrom} dateTo={dateTo} />}
       {activeTab === 'bancos' && <BancosReport bankAccounts={bankAccounts} cashMovements={applyFilters(cashMovements)} transactions={applyFilters(transactions)} dateFrom={dateFrom} dateTo={dateTo} />}
+      {activeTab === 'fechamentos' && <FechamentosReport logs={applyFilters(auditLogs)} dateFrom={dateFrom} dateTo={dateTo} />}
     </div>
   );
 }
@@ -987,6 +990,109 @@ function BancosReport({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/* ==================== FECHAMENTOS DE CAIXA ==================== */
+function FechamentosReport({ logs, dateFrom, dateTo }: { logs: any[]; dateFrom: string; dateTo: string }) {
+  const { t } = useTranslation();
+  
+  // Filter only actions that are closures
+  const fechamentos = logs.filter(log => log.action === 'fechamento_caixa');
+
+  const handleCSV = () => {
+    const headers = ['Data', 'Cobrador', 'Valor', 'Moeda', 'Caixa Destino', 'Detalhes'];
+    const rows = fechamentos
+      .sort((a, b) => (b.createdAt || b.date).localeCompare(a.createdAt || a.date))
+      .map((f) => [
+        formatDate(f.createdAt || f.date),
+        f.userName || '-',
+        f.amount.toFixed(2),
+        f.currency,
+        f.bankAccountName || '-',
+        f.transactionDescription || '-'
+      ]);
+    exportCSV('relatorio-fechamentos', headers, rows);
+  };
+
+  const buildPdf = () => {
+    const doc = new jsPDF();
+    let startY = addPdfHeader(doc, 'Relatório de Fechamentos de Caixa (Cobradores)', t, dateFrom, dateTo);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Histórico de Fechamentos (${fechamentos.length} registros)`, 14, startY);
+    startY += 4;
+    
+    const sorted = [...fechamentos].sort((a, b) => (b.createdAt || b.date).localeCompare(a.createdAt || a.date));
+    autoTable(doc, {
+      startY,
+      head: [['Data', 'Cobrador', 'Valor Final', 'Destino']],
+      body: sorted.map((f) => [
+        formatDate(f.createdAt || f.date),
+        f.userName || '-',
+        formatCurrency(f.amount, f.currency),
+        f.bankAccountName || '-',
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [30, 58, 95], textColor: 255 },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+    });
+
+    addPdfFooter(doc, t);
+    return doc;
+  };
+
+  const handlePDF = () => buildPdf().save(`relatorio-fechamentos_${new Date().toISOString().split('T')[0]}.pdf`);
+  const handlePrint = () => printPdf(buildPdf());
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="text-body font-semibold">Histórico de Fechamentos ({fechamentos.length} registros)</h2>
+        <ExportButtons onCSV={handleCSV} onPDF={handlePDF} onPrint={handlePrint} />
+      </div>
+
+      <div className="bg-card rounded-xl p-5 border border-border card-shadow">
+        <div className="overflow-x-auto">
+          <table className="w-full text-body-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground">
+                <th className="pb-2 font-medium">Data/Hora</th>
+                <th className="pb-2 font-medium">Cobrador</th>
+                <th className="pb-2 font-medium text-right">Valor Entregue</th>
+                <th className="pb-2 font-medium">Caixa Destino</th>
+                <th className="pb-2 font-medium">Detalhes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fechamentos.length === 0 ? (
+                <tr><td colSpan={5} className="text-center py-6 text-muted-foreground">Nenhum fechamento registrado no período.</td></tr>
+              ) : (
+                fechamentos
+                  .sort((a, b) => (b.createdAt || b.date).localeCompare(a.createdAt || a.date))
+                  .map((f) => (
+                    <tr key={f.id} className="border-b border-border/30">
+                      <td className="py-3">
+                        {formatDate(f.createdAt?.split('T')[0] || f.date)}
+                        <span className="text-xs text-muted-foreground block">
+                          {f.createdAt ? new Date(f.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                      </td>
+                      <td className="py-3 font-medium">{f.userName || '-'}</td>
+                      <td className="py-3 text-right font-bold text-success">
+                        {formatCurrency(f.amount, f.currency)}
+                      </td>
+                      <td className="py-3 text-muted-foreground">{f.bankAccountName || '-'}</td>
+                      <td className="py-3 text-xs text-muted-foreground max-w-[200px] truncate">{f.transactionDescription || '-'}</td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
