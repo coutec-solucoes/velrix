@@ -70,11 +70,33 @@ export default function CobradoresList() {
         userId: form.userId || undefined,
       };
 
-      const result = editing
-        ? await updateData('cobradores', editing.id, dataToSave)
-        : await addData('cobradores', { ...dataToSave, id: crypto.randomUUID(), createdAt: new Date().toISOString() } as Cobrador);
+      if (editing) {
+        const result = await updateData('cobradores', editing.id, dataToSave);
+        showSyncResult(result);
+      } else {
+        const newCobradorId = crypto.randomUUID();
+        const cobradorData = { ...dataToSave, id: newCobradorId, createdAt: new Date().toISOString() } as Cobrador;
+        const result = await addData('cobradores', cobradorData);
+        
+        // Auto-create Caixa Físico accounts for this new cobrador
+        const activeCurrencies = settings?.company?.activeCurrencies || ['BRL'];
+        for (const curr of activeCurrencies) {
+          await addData('bankAccounts', {
+            id: crypto.randomUUID(),
+            name: `Caixa ${dataToSave.name} - ${curr}`,
+            bankName: 'Caixa Físico',
+            accountType: 'caixa',
+            currency: curr,
+            initialBalance: 0,
+            currentBalance: 0,
+            active: true,
+            createdAt: new Date().toISOString(),
+          });
+        }
+        
+        showSyncResult(result);
+      }
       
-      showSyncResult(result);
       setShowModal(false);
       refreshCobradores();
     } finally { setSaving(false); }

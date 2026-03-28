@@ -33,6 +33,11 @@ export default function AreaCobrador() {
   const [paymentMethod, setPaymentMethod] = useState('dinheiro');
   const [bankAccountId, setBankAccountId] = useState('');
 
+  // Sangria Modal state
+  const [showSangriaModal, setShowSangriaModal] = useState(false);
+  const [sangriaForm, setSangriaForm] = useState({ amount: '', currency: 'BRL', description: '', bankAccountId: '' });
+  const [savingSangria, setSavingSangria] = useState(false);
+
   // Print Ref
   const handlePrintFechamento = () => {
     window.print();
@@ -48,6 +53,82 @@ export default function AreaCobrador() {
     const targetId = appUser?.id || user?.id;
     return cobradores.find(c => c.userId === targetId);
   }, [cobradores, appUser, user]);
+
+  const myCaixas = useMemo(() => {
+    if (!cobrador) return [];
+    return bankAccounts.filter(a => a.accountType === 'caixa' && a.name.includes(cobrador.name));
+  }, [bankAccounts, cobrador]);
+
+  const handleFechamentoDefinitivo = async () => {
+    if (!window.confirm("Atenção! Isso irá transferir TODO o saldo em espécie para o Caixa Principal da empresa. Você está com os valores físicos corretos para entregar?")) return;
+    setSaving(true);
+    try {
+      const mainCaixaFallbacks = bankAccounts.filter(a => a.accountType === 'caixa' && !a.name.includes(cobrador?.name || ''));
+      const date = new Date().toISOString().split('T')[0];
+      
+      for (const caixa of myCaixas) {
+        if (caixa.currentBalance <= 0) continue;
+        
+        let targetMainCaixa = mainCaixaFallbacks.find(a => a.currency === caixa.currency);
+        if (!targetMainCaixa) {
+            targetMainCaixa = mainCaixaFallbacks[0]; // best effort se não houver da mesma moeda
+        }
+        if (!targetMainCaixa) {
+           alert('Erro: Nenhum Caixa Financeiro da Empresa encontrado para receber o dinheiro. Fale com o Financeiro.');
+           break;
+        }
+
+        const amountToTransfer = caixa.currentBalance;
+
+        // Saída do Caixa do Cobrador
+        await addData('cashMovements', {
+          id: crypto.randomUUID(),
+          transactionId: crypto.randomUUID(),
+          bankAccountId: caixa.id,
+          type: 'saida',
+          amount: amountToTransfer,
+          currency: caixa.currency,
+          description: `Repasse de Fechamento de Caixa`,
+          date, userId: user?.id, userName: user?.name || cobrador?.name,
+          createdAt: new Date().toISOString()
+        });
+        await updateData('bankAccounts', caixa.id, { currentBalance: 0 } as any);
+
+        // Entrada no Caixa Principal
+        const conv = convertAmount(amountToTransfer, caixa.currency, targetMainCaixa.currency);
+        await addData('cashMovements', {
+          id: crypto.randomUUID(),
+          transactionId: crypto.randomUUID(),
+          bankAccountId: targetMainCaixa.id,
+          type: 'entrada',
+          amount: conv.convertedAmount,
+          currency: targetMainCaixa.currency,
+          description: `Recebimento Ref. Fechamento: ${cobrador?.name}`,
+          date, userId: user?.id, userName: user?.name,
+          createdAt: new Date().toISOString()
+        });
+        await updateData('bankAccounts', targetMainCaixa.id, { currentBalance: targetMainCaixa.currentBalance + conv.convertedAmount } as any);
+        
+        // Log
+        await addData('auditLogs', {
+          id: crypto.randomUUID(),
+          action: 'transferencia',
+          transactionId: crypto.randomUUID(),
+          transactionDescription: `Definitivo de: ${caixa.name} para ${targetMainCaixa.name}`,
+          amount: amountToTransfer,
+          currency: caixa.currency,
+          bankAccountId: caixa.id,
+          bankAccountName: caixa.name,
+          userId: user?.id || '',
+          userName: user?.name || '',
+          date,
+          cobradorId: cobrador?.id,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      showSyncResult({ success: true, localOnly: false }, 'Caixas físicos esvaziados e dinheiro repassado!');
+    } finally { setSaving(false); }
+  };
 
   // Clients assigned to this cobrador
   const myClients = useMemo(() => {
@@ -74,14 +155,74 @@ export default function AreaCobrador() {
   const handleBaixaClick = (tx: Transaction) => {
     setBaixaTx(tx);
     setPaymentMethod('dinheiro');
-    // Default to a bank account of type 'caixa' if found
-    const caixaAccount = bankAccounts.find(a => a.accountType === 'caixa');
-    if (caixaAccount) {
-      setBankAccountId(caixaAccount.id);
+    // Default to the cobrador's specific caixa if found, based on original currency
+    const cobradorCaixa = bankAccounts.find(a => a.accountType === 'caixa' && a.name.includes(cobrador?.name || '') && a.currency === tx.currency);
+    const fallbackCaixa = bankAccounts.find(a => a.accountType === 'caixa');
+    
+    if (cobradorCaixa) {
+      setBankAccountId(cobradorCaixa.id);
+    } else if (fallbackCaixa) {
+      setBankAccountId(fallbackCaixa.id);
     } else {
       setBankAccountId('');
     }
     setShowBaixaModal(true);
+  };
+
+  const handleSangriaClick = () => {
+    // Default to cobrador's caixa for PYG or BRL
+    const fallbackCaixa = bankAccounts.find(a => a.accountType === 'caixa' && a.name.includes(cobrador?.name || ''));
+    setSangriaForm({ amount: '', currency: fallbackCaixa?.currency || 'BRL', description: '', bankAccountId: fallbackCaixa?.id || '' });
+    setShowSangriaModal(true);
+  };
+
+  const confirmSangria = async () => {
+    if (!sangriaForm.amount || !sangriaForm.description || !sangriaForm.bankAccountId) return;
+    setSavingSangria(true);
+    try {
+      const selectedAccount = bankAccounts.find(a => a.id === sangriaForm.bankAccountId);
+      if (!selectedAccount) return;
+      
+      const numAmount = parseFloat(sangriaForm.amount);
+      const date = new Date().toISOString().split('T')[0];
+      
+      await addData('cashMovements', {
+        id: crypto.randomUUID(),
+        transactionId: crypto.randomUUID(), // Virtual transaction
+        bankAccountId: selectedAccount.id,
+        type: 'saida',
+        amount: numAmount,
+        currency: selectedAccount.currency,
+        description: `Sangria/Despesa (Cobrador): ${sangriaForm.description}`,
+        date: date,
+        userId: user?.id,
+        userName: user?.name || cobrador?.name,
+        createdAt: new Date().toISOString(),
+      });
+      
+      await updateData('bankAccounts', selectedAccount.id, { currentBalance: selectedAccount.currentBalance - numAmount } as any);
+      
+      await addData('auditLogs', {
+        id: crypto.randomUUID(),
+        action: 'despesa',
+        transactionId: crypto.randomUUID(),
+        transactionDescription: `Sangria: ${sangriaForm.description}`,
+        amount: numAmount,
+        currency: selectedAccount.currency,
+        bankAccountId: selectedAccount.id,
+        bankAccountName: selectedAccount.name,
+        userId: user?.id || '',
+        userName: user?.name || '',
+        date: date,
+        cobradorId: cobrador?.id,
+        createdAt: new Date().toISOString(),
+      });
+
+      showSyncResult({ success: true, localOnly: false }, 'Sangria registrada com sucesso');
+      setShowSangriaModal(false);
+    } finally {
+      setSavingSangria(false);
+    }
   };
 
   const confirmBaixa = async () => {
@@ -247,7 +388,12 @@ export default function AreaCobrador() {
     <div className="space-y-5 max-w-4xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-title-lg">Área do Cobrador</h1>
-        <p className="text-secondary font-medium px-3 py-1 bg-secondary/10 rounded-full">{cobrador.name}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-secondary font-medium px-3 py-1 bg-secondary/10 rounded-full">{cobrador.name}</p>
+          <button onClick={handleSangriaClick} className="px-3 py-1 bg-warning/10 text-warning rounded-full font-medium text-sm flex items-center gap-1 hover:bg-warning/20 transition-colors">
+            <Wallet size={14} /> Sangria / Despesas
+          </button>
+        </div>
       </div>
 
       <div className="flex rounded-xl overflow-hidden border border-border bg-card">
@@ -402,24 +548,36 @@ export default function AreaCobrador() {
           </div>
 
           <div className="hidden print:block text-center mb-6">
-            <h1 className="text-xl font-bold uppercase">{getAppData().settings?.companyName || 'Prestação de Contas'}</h1>
+            <h1 className="text-xl font-bold uppercase">{getAppData().settings?.company?.name || 'Prestação de Contas'}</h1>
             <p className="text-sm">Cobrador: {cobrador.name}</p>
             <p className="text-sm">Data: {formatDate(fechamentoDate)}</p>
           </div>
 
           <div className="mb-6 border-b border-border pb-6">
-            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Banknote size={18} /> Resumo Físico (Dinheiro em Espécie)</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {Object.entries(groupedCash.cash).map(([currency, amount]) => (
-                <div key={currency} className="bg-card rounded-lg p-4 border border-border card-shadow align-middle">
-                  <p className="text-sm text-muted-foreground font-medium uppercase">{currency}</p>
-                  <p className="text-xl font-bold">{formatCurrency(amount, currency as any)}</p>
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Banknote size={18} /> Saldo Atual na Mochila (Valores Físicos)</h3>
+            <p className="text-xs text-muted-foreground mb-3 font-medium">Estes são os valores físicos (descontando sangrias) que você deve entregar hoje.</p>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {myCaixas.map((caixa) => (
+                <div key={caixa.id} className="bg-card rounded-lg p-4 border border-border card-shadow align-middle">
+                  <p className="text-sm text-muted-foreground font-medium uppercase">{caixa.currency}</p>
+                  <p className={`text-xl font-bold ${caixa.currentBalance > 0 ? 'text-success' : ''}`}>
+                    {formatCurrency(caixa.currentBalance, caixa.currency)}
+                  </p>
                 </div>
               ))}
-              {Object.keys(groupedCash.cash).length === 0 && (
-                <p className="text-muted-foreground text-sm py-2 col-span-2">Nenhum recebimento em Dinheiro hoje.</p>
+              {myCaixas.length === 0 && (
+                <p className="text-muted-foreground text-sm py-2 col-span-2">Você não possui um "Caixa Físico" habilitado em seu nome.</p>
               )}
             </div>
+            {myCaixas.some(c => c.currentBalance > 0) && (
+              <button 
+                onClick={handleFechamentoDefinitivo}
+                disabled={saving}
+                className="w-full bg-success text-success-foreground font-bold py-3 rounded-xl card-shadow hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
+              >
+                <CheckCircle size={20} /> Entregar Valores (Esvaziar Caixa e Repassar)
+              </button>
+            )}
           </div>
 
           <div className="mb-6 border-b border-border pb-6">
@@ -569,12 +727,28 @@ export default function AreaCobrador() {
                   className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
                 >
                   <option value="" disabled>Selecione a conta destino...</option>
-                  {bankAccounts.map(acc => (
+                  {bankAccounts
+                    .filter(a => paymentMethod === 'dinheiro' ? a.accountType === 'caixa' : a.accountType !== 'caixa')
+                    .map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
                   ))}
                 </select>
                 {paymentMethod === 'dinheiro' && bankAccounts.some(a => a.accountType === 'caixa') && (
                   <p className="text-xs text-muted-foreground mt-1">Sugerido: Conta classificada como Caixa Físico.</p>
+                )}
+                
+                {/* Live Currency Conversion Warning */}
+                {bankAccountId && bankAccounts.find(a => a.id === bankAccountId)?.currency !== baixaTx.currency && (
+                  <div className="mt-3 p-3 bg-warning/10 border border-warning/20 rounded-lg flex flex-col items-center">
+                    <p className="text-xs text-muted-foreground mb-1 uppercase font-semibold text-warning">A conversão será aplicada na baixa</p>
+                    <p className="text-lg font-bold text-warning">
+                      {formatCurrency(
+                        convertAmount(baixaTx.amount, baixaTx.currency, bankAccounts.find(a => a.id === bankAccountId)!.currency).convertedAmount,
+                        bankAccounts.find(a => a.id === bankAccountId)!.currency as any
+                      )}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Baseado no câmbio configurado no sistema</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -594,6 +768,83 @@ export default function AreaCobrador() {
                 className="flex-1 px-4 py-2 bg-success text-success-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {saving ? 'Confirmando...' : 'Confirmar e Receber'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSangriaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in print:hidden">
+          <div className="bg-card w-full max-w-md rounded-xl card-shadow border border-border animate-scale-in">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="text-title-sm font-bold flex items-center gap-2"><Wallet size={20} className="text-warning"/> Registrar Sangria</h2>
+              <button onClick={() => setShowSangriaModal(false)} className="p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors hover:bg-accent rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-foreground">Retirar deste Caixa Físico</label>
+                <select 
+                  value={sangriaForm.bankAccountId} 
+                  onChange={(e) => setSangriaForm({...sangriaForm, bankAccountId: e.target.value})}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
+                >
+                  <option value="" disabled>Selecione a conta...</option>
+                  {bankAccounts.filter(a => a.accountType === 'caixa' && a.name.includes(cobrador.name)).map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
+                  ))}
+                  {bankAccounts.filter(a => a.accountType === 'caixa' && !a.name.includes(cobrador.name)).map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Valor da Despesa</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                    {bankAccounts.find(a => a.id === sangriaForm.bankAccountId)?.currency || 'BRL'}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={sangriaForm.amount}
+                    onChange={(e) => setSangriaForm({...sangriaForm, amount: e.target.value})}
+                    className="w-full border border-border rounded-lg pl-12 pr-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Motivo (ex: Gasolina, Almoço)</label>
+                <input
+                  type="text"
+                  placeholder="Descreva a finalidade desta sangria"
+                  value={sangriaForm.description}
+                  onChange={(e) => setSangriaForm({...sangriaForm, description: e.target.value})}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
+                />
+              </div>
+
+            </div>
+            <div className="flex gap-2 p-4 border-t border-border bg-muted/30">
+              <button 
+                type="button" 
+                onClick={() => setShowSangriaModal(false)}
+                className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-accent transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                onClick={confirmSangria}
+                disabled={savingSangria || !sangriaForm.amount || !sangriaForm.description || !sangriaForm.bankAccountId}
+                className="flex-1 px-4 py-2 bg-warning text-warning-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {savingSangria ? 'Registrando...' : 'Confirmar Sangria'}
               </button>
             </div>
           </div>
