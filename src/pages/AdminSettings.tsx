@@ -1,79 +1,14 @@
 import { useState, useEffect } from 'react';
 import { fetchAdminSettings, updateAdminSettingsSupa, fetchPlans, createPlan, updatePlanSupa, deletePlanSupa, fetchActivityLogs } from '@/services/adminSupabaseService';
 import { AdminSettings, SaasPlan, AdminActivityLog } from '@/types/admin';
-import { Settings, Database, CreditCard, Clock, Save, Plus, Trash2, Edit2, X, Palette, Wifi, WifiOff, Loader2, CheckCircle2, XCircle, RefreshCw, Copy, Table2, Play, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
+import { Settings, Database, CreditCard, Clock, Save, Plus, Trash2, Edit2, X, Palette, Wifi, WifiOff, Loader2, CheckCircle2, XCircle, RefreshCw, Copy, Table2, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getSupabase } from '@/lib/supabase';
-import { allTables, TableSchema, getFullSchemaSQL, makeIdempotent, EXEC_SQL_BOOTSTRAP } from '@/lib/dbSchema';
+import { allTables, TableSchema, getFullSchemaSQL, makeIdempotent } from '@/lib/dbSchema';
 import DataSyncPanel from '@/components/admin/DataSyncPanel';
 
 const inputClass = 'bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-xs text-white placeholder:text-white/40 outline-none focus:ring-1 focus:ring-secondary w-full';
-
-function SqlBlockItem({ table, index, externalStatus, manualOnly = false }: { table: TableSchema; index: number; externalStatus?: { status: 'idle' | 'running' | 'success' | 'error'; message: string }; manualOnly?: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [localStatus, setLocalStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
-  const [localMessage, setLocalMessage] = useState('');
-
-  const status = externalStatus?.status ?? localStatus;
-  const message = externalStatus?.message ?? localMessage;
-
-  const copySQL = () => {
-    navigator.clipboard.writeText(makeIdempotent(table.sql));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const executeSQL = async () => {
-    setLocalStatus('error');
-    setLocalMessage('Execução direta via UI desabilitada por segurança (Padrão Enterprise). Copie e execute no SQL Editor do Supabase.');
-  };
-
-  return (
-    <div className={`rounded-lg border transition-colors ${
-      status === 'success' ? 'bg-emerald-500/5 border-emerald-500/20' :
-      status === 'error' ? 'bg-destructive/5 border-destructive/20' :
-      status === 'running' ? 'bg-secondary/5 border-secondary/20' :
-      'bg-white/5 border-white/10'
-    }`}>
-      <div className="flex items-center justify-between px-3 py-2.5 gap-2">
-        <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
-          {expanded ? <ChevronDown size={14} className="text-white/40 shrink-0" /> : <ChevronRight size={14} className="text-white/40 shrink-0" />}
-          <span className="text-white/30 text-xs font-mono shrink-0">{index + 1}.</span>
-          <span className="text-white text-xs font-medium font-mono truncate">{table.name}</span>
-          <span className="text-white/40 text-xs truncate hidden sm:inline">{table.description}</span>
-        </button>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {status === 'success' && <CheckCircle2 size={14} className="text-emerald-400" />}
-          {status === 'error' && <XCircle size={14} className="text-destructive" />}
-          {status === 'running' && <Loader2 size={14} className="text-secondary animate-spin" />}
-          <button onClick={copySQL} className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors" title="Copiar SQL">
-            <Copy size={13} />
-          </button>
-          <button onClick={executeSQL} disabled={status === 'running' || manualOnly}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-secondary/20 text-secondary text-xs font-medium hover:bg-secondary/30 transition-colors disabled:opacity-50"
-            title="Execute no SQL Editor do Supabase">
-            <Play size={12} />
-            SQL Editor
-          </button>
-        </div>
-      </div>
-      {message && (
-        <div className={`mx-3 mb-2 px-2.5 py-1.5 rounded text-xs ${
-          status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-destructive/10 text-destructive'
-        }`}>
-          {message}
-        </div>
-      )}
-      {expanded && (
-        <pre className="mx-3 mb-3 bg-black/30 border border-white/10 rounded-lg p-3 text-xs text-emerald-300 overflow-x-auto max-h-60 overflow-y-auto font-mono whitespace-pre-wrap">
-          {makeIdempotent(table.sql)}
-        </pre>
-      )}
-    </div>
-  );
-}
 
 type Tab = 'supabase' | 'database' | 'sync' | 'plans' | 'logs' | 'brand' | 'apis';
 
@@ -81,13 +16,7 @@ interface TableStatus {
   name: string;
   description: string;
   exists: boolean;
-  creating?: boolean;
   error?: string;
-}
-
-interface SqlBlockStatus {
-  status: 'idle' | 'running' | 'success' | 'error';
-  message: string;
 }
 
 export default function AdminSettingsPage() {
@@ -104,16 +33,8 @@ export default function AdminSettingsPage() {
   // Database verification state
   const [tableStatuses, setTableStatuses] = useState<TableStatus[]>([]);
   const [checking, setChecking] = useState(false);
-  const [creatingAll, setCreatingAll] = useState(false);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [copiedSQL, setCopiedSQL] = useState(false);
-
-  // Run All SQL state
-  const [runAllActive, setRunAllActive] = useState(false);
-  const [runAllIndex, setRunAllIndex] = useState(-1);
-  const [runAllStatuses, setRunAllStatuses] = useState<Record<string, SqlBlockStatus>>({});
-  const runAllSuccessCount = Object.values(runAllStatuses).filter(s => s.status === 'success').length;
-  const runAllErrorCount = Object.values(runAllStatuses).filter(s => s.status === 'error').length;
 
   const [showPlanForm, setShowPlanForm] = useState(false);
   const [editPlanId, setEditPlanId] = useState<string | null>(null);
@@ -228,15 +149,10 @@ export default function AdminSettingsPage() {
 
       // Check functions by calling them (they return null without auth but won't 404)
       let functionsExist = false;
-      let execSqlExists = false;
       try {
         const { error } = await client.rpc('get_user_role');
         functionsExist = !error || !error.message.includes('Could not find');
       } catch { functionsExist = false; }
-      try {
-        const { error } = await client.rpc('exec_sql', { sql_query: 'SELECT 1' });
-        execSqlExists = !error || !error.message.includes('Could not find');
-      } catch { execSqlExists = false; }
 
       // Check views
       let viewsExist = false;
@@ -250,11 +166,12 @@ export default function AdminSettingsPage() {
       const profilesRlsExists = functionsExist; // If RLS functions work, the profiles RLS block was applied
 
       for (const table of allTables) {
+        // Special checks for non-table entries
         if (table.name === '_exec_sql') {
-          statuses.push({ name: table.name, description: table.description, exists: execSqlExists, error: execSqlExists ? undefined : '⚠️ Requer SQL Editor (superusuário)' });
+          // exec_sql já não é mais necessário — execução via UI foi removida
+          statuses.push({ name: table.name, description: table.description, exists: true });
           continue;
         }
-        // Special checks for non-table entries
         if (table.name === '_rls_functions') {
           statuses.push({ name: table.name, description: table.description, exists: functionsExist, error: functionsExist ? undefined : '⚠️ Requer SQL Editor (superusuário)' });
           continue;
@@ -276,8 +193,28 @@ export default function AdminSettingsPage() {
         if (table.name === '_migrations_v2') {
           try {
             const { error } = await client.from('clients').select('address_complement').limit(0);
-            const migrationApplied = !error;
-            statuses.push({ name: table.name, description: table.description, exists: migrationApplied, error: migrationApplied ? undefined : 'Colunas ainda não adicionadas' });
+            const ok = !error;
+            statuses.push({ name: table.name, description: table.description, exists: ok, error: ok ? undefined : 'Colunas ainda não adicionadas — execute no SQL Editor' });
+          } catch {
+            statuses.push({ name: table.name, description: table.description, exists: false, error: 'Verificar manualmente' });
+          }
+          continue;
+        }
+        if (table.name === '_migrations_v3') {
+          try {
+            const { error } = await client.from('cash_movements').select('payment_method').limit(0);
+            const ok = !error;
+            statuses.push({ name: table.name, description: table.description, exists: ok, error: ok ? undefined : 'Coluna payment_method não adicionada — execute no SQL Editor' });
+          } catch {
+            statuses.push({ name: table.name, description: table.description, exists: false, error: 'Verificar manualmente' });
+          }
+          continue;
+        }
+        if (table.name === '_migrations_v4') {
+          try {
+            const { error } = await client.from('companies').select('contract_title').limit(0);
+            const ok = !error;
+            statuses.push({ name: table.name, description: table.description, exists: ok, error: ok ? undefined : 'Colunas de contrato não adicionadas — execute no SQL Editor' });
           } catch {
             statuses.push({ name: table.name, description: table.description, exists: false, error: 'Verificar manualmente' });
           }
@@ -303,35 +240,6 @@ export default function AdminSettingsPage() {
     } finally {
       setChecking(false);
     }
-  };
-
-  const createSingleTable = async (table: TableSchema) => {
-    const client = getSupabase();
-    if (!client) return;
-    setTableStatuses(prev => prev.map(s => s.name === table.name ? { ...s, creating: true, error: undefined } : s));
-    try {
-      const { error } = await client.rpc('exec_sql', { sql_query: makeIdempotent(table.sql) });
-      if (error) {
-        setTableStatuses(prev => prev.map(s => s.name === table.name ? { ...s, creating: false, error: error.message } : s));
-      } else {
-        setTableStatuses(prev => prev.map(s => s.name === table.name ? { ...s, creating: false, exists: true, error: undefined } : s));
-      }
-    } catch {
-      setTableStatuses(prev => prev.map(s => s.name === table.name ? { ...s, creating: false, error: 'Use o SQL Editor do Supabase para criar esta tabela manualmente.' } : s));
-    }
-  };
-
-  const createAllMissing = async () => {
-    setCreatingAll(true);
-    const missing = allTables.filter(t => {
-      const status = tableStatuses.find(s => s.name === t.name);
-      return status && !status.exists;
-    });
-    for (const table of missing) {
-      await createSingleTable(table);
-    }
-    setCreatingAll(false);
-    setTimeout(() => checkTables(), 1000);
   };
 
   // Generate SQL only for missing items
