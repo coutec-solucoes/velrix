@@ -1111,7 +1111,7 @@ CREATE POLICY "Can delete cash_movements for own company"
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
   company_name TEXT DEFAULT '',
-  action TEXT NOT NULL CHECK (action IN ('baixa_recebimento', 'baixa_pagamento', 'estorno')),
+  action TEXT NOT NULL CHECK (action IN ('baixa_recebimento', 'baixa_pagamento', 'estorno', 'despesa', 'transferencia', 'fechamento_caixa')),
   transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL,
   transaction_description TEXT NOT NULL DEFAULT '',
   client_id UUID,
@@ -1345,13 +1345,25 @@ CREATE POLICY "Can insert bank_accounts for own company"
   ON bank_accounts FOR INSERT TO authenticated
   WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'));
 
--- Inserir movimentações de caixa
+-- Atualizar e Inserir movimentações de caixa
+DROP POLICY IF EXISTS "Can update cash_movements for own company" ON cash_movements;
+CREATE POLICY "Can update cash_movements for own company"
+  ON cash_movements FOR UPDATE TO authenticated
+  USING (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'))
+  WITH CHECK (company_id = public.get_user_company_id());
+
 DROP POLICY IF EXISTS "Can insert cash_movements for own company" ON cash_movements;
 CREATE POLICY "Can insert cash_movements for own company"
   ON cash_movements FOR INSERT TO authenticated
   WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'));
 
--- Inserir logs de auditoria
+-- Atualizar e Inserir logs de auditoria
+DROP POLICY IF EXISTS "Can update audit_logs for own company" ON audit_logs;
+CREATE POLICY "Can update audit_logs for own company"
+  ON audit_logs FOR UPDATE TO authenticated
+  USING (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'))
+  WITH CHECK (company_id = public.get_user_company_id());
+
 DROP POLICY IF EXISTS "Can insert audit_logs for own company" ON audit_logs;
 CREATE POLICY "Can insert audit_logs for own company"
   ON audit_logs FOR INSERT TO authenticated
