@@ -5,21 +5,29 @@ import { queryClient } from '@/lib/queryClient';
 
 // ===== React Query Cache (replaces localStorage & memoryCache) =====
 
+let persistentMemoryCache: AppData | null = null;
+
 function getDefaultData(): AppData {
   return generateMockData();
 }
 
 export function getAppData(): AppData {
+  if (persistentMemoryCache) return persistentMemoryCache;
+  
   const cached = queryClient.getQueryData<AppData>(['appData']);
   if (!cached) {
     const defaultData = getDefaultData();
     queryClient.setQueryData(['appData'], defaultData);
+    persistentMemoryCache = defaultData;
     return defaultData;
   }
+  
+  persistentMemoryCache = cached;
   return cached;
 }
 
 function updateCache(data: AppData) {
+  persistentMemoryCache = data;
   queryClient.setQueryData(['appData'], data);
   (Object.keys(data) as Array<keyof AppData>).forEach((k) => {
     queryClient.setQueryData(['appData', k], data[k]);
@@ -179,6 +187,7 @@ async function getCompanyContext(): Promise<{ companyId: string | null; companyN
 
 export function clearCompanyCache() {
   cachedCompanyContext = null;
+  persistentMemoryCache = null;
   queryClient.removeQueries({ queryKey: ['appData'] });
 }
 
