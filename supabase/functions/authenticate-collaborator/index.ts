@@ -68,7 +68,7 @@ Deno.serve(async (req: Request) => {
     // Try by username first
     const { data: byUsername } = await supabaseAdmin
       .from("users")
-      .select("id, company_id, company_name, name, email, role, permissions, password, active, username")
+      .select("id, company_id, company_name, name, email, role, permissions, password, username")
       .eq("company_id", companyId)
       .ilike("username", username.trim())
       .maybeSingle();
@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
     if (!collaborator) {
       const { data: byName } = await supabaseAdmin
         .from("users")
-        .select("id, company_id, company_name, name, email, role, permissions, password, active, username")
+        .select("id, company_id, company_name, name, email, role, permissions, password, username")
         .eq("company_id", companyId)
         .is("username", null)
         .ilike("name", username.trim())
@@ -92,10 +92,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Usuário não encontrado nesta empresa." }, 404);
     }
 
-    if (collaborator.active === false) {
-      return jsonResponse({ error: "Usuário inativo. Contate o proprietário." }, 403);
-    }
-
+    // removed active check since column does not exist on users
     // 3. Validate password
     if (!collaborator.password) {
       return jsonResponse({ error: "Este usuário está sem senha cadastrada. O proprietário precisa definir uma senha." }, 403);
