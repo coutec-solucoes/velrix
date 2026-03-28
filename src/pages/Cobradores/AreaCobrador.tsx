@@ -352,30 +352,38 @@ export default function AreaCobrador() {
     return paidTodayTxs.reduce((sum, tx) => sum + tx.amount, 0);
   }, [paidTodayTxs]);
 
+  const groupedSangrias = useMemo(() => {
+    const totals: Record<string, number> = {};
+    todaysSangrias.forEach(s => {
+      totals[s.currency] = (totals[s.currency] || 0) + s.amount;
+    });
+    return totals;
+  }, [todaysSangrias]);
+
   // Group by Method / Currency / BankAccount for specific reporting
   const groupedCash = useMemo(() => {
     const cash: Record<string, number> = {};
     const pix: Record<string, number> = {};
     const cards: Record<string, number> = {};
+    const deposits: Record<string, number> = {};
 
     paidTodayTxs.forEach(tx => {
       const method = tx.paymentMethod || 'dinheiro';
-      const isDinheiro = method === 'dinheiro';
-      const isCard = method === 'cartao_credito' || method === 'cartao_debito';
+      const accId = tx.bankAccountId || 'n/a';
 
-      if (isDinheiro) {
+      if (method === 'dinheiro') {
         const key = tx.currency;
         cash[key] = (cash[key] || 0) + tx.amount;
-      } else if (isCard) {
-        const accId = tx.bankAccountId || 'n/a';
+      } else if (method === 'cartao_credito' || method === 'cartao_debito') {
         cards[accId] = (cards[accId] || 0) + tx.amount;
-      } else {
-        const accId = tx.bankAccountId || 'n/a';
+      } else if (method === 'pix') {
         pix[accId] = (pix[accId] || 0) + tx.amount;
+      } else {
+        deposits[accId] = (deposits[accId] || 0) + tx.amount;
       }
     });
 
-    return { cash, pix, cards };
+    return { cash, pix, cards, deposits };
   }, [paidTodayTxs]);
 
   const paymentMethodLabel = (method?: string) => {
@@ -570,8 +578,27 @@ export default function AreaCobrador() {
           </div>
 
           <div className="mb-6 border-b border-border pb-6">
-            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Banknote size={18} /> Saldo Atual na Mochila (Valores Físicos)</h3>
-            <p className="text-xs text-muted-foreground mb-3 font-medium">Estes são os valores físicos (descontando sangrias) que você deve entregar hoje.</p>
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Banknote size={18} /> Resumo Físico (Dinheiro Real)</h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+              <div className="bg-card rounded-lg p-4 border border-border border-dashed">
+                <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Total Arrecadado (Bruto)</p>
+                {Object.entries(groupedCash.cash).map(([cur, amount]) => (
+                  <p key={cur} className="font-semibold text-sm mb-1">{formatCurrency(amount, cur)}</p>
+                ))}
+                {Object.keys(groupedCash.cash).length === 0 && <p className="text-sm font-medium">Nenhum valor em espécie</p>}
+              </div>
+
+              <div className="bg-card rounded-lg p-4 border border-border border-dashed">
+                <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Total Sangrias (Despesas)</p>
+                {Object.entries(groupedSangrias).map(([cur, amount]) => (
+                  <p key={cur} className="font-semibold text-sm text-warning mb-1">-{formatCurrency(amount, cur)}</p>
+                ))}
+                {Object.keys(groupedSangrias).length === 0 && <p className="text-sm font-medium">Nenhuma sangria</p>}
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground mb-3 font-medium">Líquido na Mochila (Valor que deve ser entregue fisicamente):</p>
             <div className="grid grid-cols-2 gap-3 mb-4">
               {myCaixas.map((caixa) => (
                 <div key={caixa.id} className="bg-card rounded-lg p-4 border border-border card-shadow align-middle">
@@ -596,34 +623,54 @@ export default function AreaCobrador() {
             )}
           </div>
 
-          <div className="mb-6 border-b border-border pb-6">
-            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><QrCode size={18} /> PIX e Bancos Diferidos</h3>
-            <div className="space-y-3">
-              {Object.entries(groupedCash.pix).map(([accId, amount]) => {
-                const acc = bankAccounts.find(a => a.id === accId);
-                return (
-                  <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
-                    <p className="font-medium text-sm">{acc?.name || 'Conta não identificada'}</p>
-                    <p className="font-bold">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
-                  </div>
-                );
-              })}
-              {Object.keys(groupedCash.pix).length === 0 && (
-                <p className="text-muted-foreground text-sm py-2">Nenhum recebimento via digital hoje.</p>
-              )}
+          <div className="mb-6 border-b border-border pb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="font-semibold text-md mb-3 flex items-center gap-2"><QrCode size={16} /> Recebimentos em PIX</h3>
+              <div className="space-y-2">
+                {Object.entries(groupedCash.pix).map(([accId, amount]) => {
+                  const acc = bankAccounts.find(a => a.id === accId);
+                  return (
+                    <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
+                      <p className="font-medium text-xs">{acc?.name || 'Conta não identificada'}</p>
+                      <p className="font-bold text-sm">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
+                    </div>
+                  );
+                })}
+                {Object.keys(groupedCash.pix).length === 0 && (
+                  <p className="text-muted-foreground text-xs py-2 italic">Nenhum recebimento em PIX hoje.</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-md mb-3 flex items-center gap-2"><Landmark size={16} /> Depósito / Transferência Bancária</h3>
+              <div className="space-y-2">
+                {Object.entries(groupedCash.deposits).map(([accId, amount]) => {
+                  const acc = bankAccounts.find(a => a.id === accId);
+                  return (
+                    <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
+                      <p className="font-medium text-xs">{acc?.name || 'Conta não identificada'}</p>
+                      <p className="font-bold text-sm">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
+                    </div>
+                  );
+                })}
+                {Object.keys(groupedCash.deposits).length === 0 && (
+                  <p className="text-muted-foreground text-xs py-2 italic">Nenhum depósito bancário hoje.</p>
+                )}
+              </div>
             </div>
           </div>
 
           {Object.keys(groupedCash.cards).length > 0 && (
             <div className="mb-6 border-b border-border pb-6">
-              <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><CreditCard size={18} /> Cartões</h3>
-              <div className="space-y-3">
+              <h3 className="font-semibold text-md mb-3 flex items-center gap-2"><CreditCard size={16} /> Cartões</h3>
+              <div className="space-y-2">
                 {Object.entries(groupedCash.cards).map(([accId, amount]) => {
                   const acc = bankAccounts.find(a => a.id === accId);
                   return (
                     <div key={accId} className="flex justify-between items-center bg-card rounded-lg p-3 border border-border">
-                      <p className="font-medium text-sm">{acc?.name || 'Conta não identificada'}</p>
-                      <p className="font-bold">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
+                      <p className="font-medium text-xs">{acc?.name || 'Conta não identificada'}</p>
+                      <p className="font-bold text-sm">{formatCurrency(amount, acc?.currency || 'BRL')}</p>
                     </div>
                   );
                 })}
