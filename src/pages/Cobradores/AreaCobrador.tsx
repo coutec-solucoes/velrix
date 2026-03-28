@@ -84,13 +84,13 @@ export default function AreaCobrador() {
         // Saída do Caixa do Cobrador
         await addData('cashMovements', {
           id: crypto.randomUUID(),
-          transactionId: crypto.randomUUID(),
           bankAccountId: caixa.id,
           type: 'saida',
           amount: amountToTransfer,
           currency: caixa.currency,
           description: `Repasse de Fechamento de Caixa`,
           date, userId: user?.id, userName: user?.name || cobrador?.name,
+          cobradorId: cobrador?.id,
           createdAt: new Date().toISOString()
         });
         await updateData('bankAccounts', caixa.id, { currentBalance: 0 } as any);
@@ -99,7 +99,6 @@ export default function AreaCobrador() {
         const conv = convertAmount(amountToTransfer, caixa.currency, targetMainCaixa.currency);
         await addData('cashMovements', {
           id: crypto.randomUUID(),
-          transactionId: crypto.randomUUID(),
           bankAccountId: targetMainCaixa.id,
           type: 'entrada',
           amount: conv.convertedAmount,
@@ -114,7 +113,6 @@ export default function AreaCobrador() {
         await addData('auditLogs', {
           id: crypto.randomUUID(),
           action: 'transferencia',
-          transactionId: crypto.randomUUID(),
           transactionDescription: `Definitivo de: ${caixa.name} para ${targetMainCaixa.name}`,
           amount: amountToTransfer,
           currency: caixa.currency,
@@ -187,26 +185,50 @@ export default function AreaCobrador() {
       const numAmount = parseFloat(sangriaForm.amount);
       const date = new Date().toISOString().split('T')[0];
       
+      const txId = crypto.randomUUID();
+
+      // 1. Create a formal transaction of type 'despesa' so it shows up in Financial Reports
+      await addData('transactions', {
+        id: txId,
+        type: 'despesa',
+        description: `Sangria/Despesa na Rua: ${sangriaForm.description}`,
+        amount: numAmount,
+        currency: selectedAccount.currency,
+        category: 'Despesa de Cobrador',
+        dueDate: date,
+        status: 'pago',
+        paidAt: date,
+        paymentMethod: 'dinheiro', // Sangrias from cobrador are usually cash
+        bankAccountId: selectedAccount.id,
+        cobradorId: cobrador?.id,
+        userId: user?.id,
+        createdAt: new Date().toISOString(),
+      });
+
+      // 2. Add the cash movement representing the physical money leaving the backpack
       await addData('cashMovements', {
         id: crypto.randomUUID(),
-        transactionId: crypto.randomUUID(), // Virtual transaction
+        transactionId: txId,
         bankAccountId: selectedAccount.id,
         type: 'saida',
         amount: numAmount,
         currency: selectedAccount.currency,
-        description: `Sangria/Despesa (Cobrador): ${sangriaForm.description}`,
+        description: `Sangria: ${sangriaForm.description}`,
         date: date,
         userId: user?.id,
         userName: user?.name || cobrador?.name,
+        cobradorId: cobrador?.id,
         createdAt: new Date().toISOString(),
       });
       
+      // 3. Update the cobrador's specific physical account balance
       await updateData('bankAccounts', selectedAccount.id, { currentBalance: selectedAccount.currentBalance - numAmount } as any);
       
+      // 4. Log the action
       await addData('auditLogs', {
         id: crypto.randomUUID(),
         action: 'despesa',
-        transactionId: crypto.randomUUID(),
+        transactionId: txId,
         transactionDescription: `Sangria: ${sangriaForm.description}`,
         amount: numAmount,
         currency: selectedAccount.currency,
@@ -258,6 +280,7 @@ export default function AreaCobrador() {
           date: date,
           userId: user?.id,
           userName: user?.name || cobrador?.name,
+          cobradorId: cobrador?.id,
           createdAt: new Date().toISOString(),
         });
         if (acc) {
@@ -344,7 +367,7 @@ export default function AreaCobrador() {
       // Filter by the description we use for sangrias OR by the user's name just in case
       const isSangria = (m.description?.toLowerCase()?.includes('sangria') || m.description?.toLowerCase()?.includes('despesa'));
       const txDate = m.date?.split('T')[0] || m.createdAt.split('T')[0];
-      return isSangria && txDate === fechamentoDate && m.userName === (user?.name || cobrador.name);
+      return isSangria && txDate === fechamentoDate && (m.cobradorId === cobrador.id || m.userName === (user?.name || cobrador.name));
     });
   }, [cashMovements, cobrador, fechamentoDate, user]);
   
