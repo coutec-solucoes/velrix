@@ -15,6 +15,7 @@ export default function AreaCobrador() {
   const [clients] = useRealtimeData('clients');
   const [transactions] = useRealtimeData('transactions');
   const [bankAccounts] = useRealtimeData('bankAccounts');
+  const [cashMovements] = useRealtimeData('cashMovements');
   const { showSyncResult } = useSyncToast();
 
   const [activeTab, setActiveTab] = useState<'cobrar' | 'fechamento'>('cobrar');
@@ -329,8 +330,23 @@ export default function AreaCobrador() {
   // Hooks must be called unconditionally
   const paidTodayTxs = useMemo(() => {
     if (!cobrador) return [];
-    return transactions.filter(t => t.cobradorId === cobrador.id && t.paidAt === fechamentoDate && t.status === 'pago');
+    return transactions.filter(t => {
+      if (t.cobradorId !== cobrador.id || t.status !== 'pago' || !t.paidAt) return false;
+      const txPaidDate = t.paidAt.split('T')[0];
+      return txPaidDate === fechamentoDate;
+    });
   }, [transactions, cobrador, fechamentoDate]);
+  
+  const todaysSangrias = useMemo(() => {
+    if (!cobrador) return [];
+    return cashMovements.filter(m => {
+      if (m.type !== 'saida') return false;
+      // Filter by the description we use for sangrias OR by the user's name just in case
+      const isSangria = (m.description?.toLowerCase()?.includes('sangria') || m.description?.toLowerCase()?.includes('despesa'));
+      const txDate = m.date?.split('T')[0] || m.createdAt.split('T')[0];
+      return isSangria && txDate === fechamentoDate && m.userName === (user?.name || cobrador.name);
+    });
+  }, [cashMovements, cobrador, fechamentoDate, user]);
   
   const totalPaidToday = useMemo(() => {
     return paidTodayTxs.reduce((sum, tx) => sum + tx.amount, 0);
@@ -636,6 +652,25 @@ export default function AreaCobrador() {
             })}
             {paidTodayTxs.length === 0 && (
               <p className="text-muted-foreground text-sm text-center py-4 border border-border border-dashed rounded-lg">Nenhum recebimento registrado nesta data.</p>
+            )}
+          </div>
+
+          <div className="space-y-4 mb-8">
+            <h3 className="font-medium border-b border-border pb-2 text-lg">Sangrias e Despesas Realizadas</h3>
+            {todaysSangrias.map(m => {
+              const accName = bankAccounts.find(a => a.id === m.bankAccountId)?.name || 'Caixa Físico';
+              return (
+                <div key={m.id} className="flex justify-between items-center text-sm py-2 border-b border-border border-dashed last:border-0">
+                  <div>
+                    <p className="font-medium">{m.description}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{accName}</p>
+                  </div>
+                  <p className="font-semibold text-warning">-{formatCurrency(m.amount, m.currency)}</p>
+                </div>
+              );
+            })}
+            {todaysSangrias.length === 0 && (
+              <p className="text-muted-foreground text-sm text-center py-4 border border-border border-dashed rounded-lg">Nenhuma sangria registrada nesta data.</p>
             )}
           </div>
 
