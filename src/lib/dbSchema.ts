@@ -1328,12 +1328,22 @@ CREATE POLICY "Can update transactions for own company"
   USING (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'))
   WITH CHECK (company_id = public.get_user_company_id());
 
+DROP POLICY IF EXISTS "Can insert transactions for own company" ON transactions;
+CREATE POLICY "Can insert transactions for own company"
+  ON transactions FOR INSERT TO authenticated
+  WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'));
+
 -- Atualizar contas bancárias
 DROP POLICY IF EXISTS "Can update bank_accounts for own company" ON bank_accounts;
 CREATE POLICY "Can update bank_accounts for own company"
   ON bank_accounts FOR UPDATE TO authenticated
   USING (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'))
   WITH CHECK (company_id = public.get_user_company_id());
+
+DROP POLICY IF EXISTS "Can insert bank_accounts for own company" ON bank_accounts;
+CREATE POLICY "Can insert bank_accounts for own company"
+  ON bank_accounts FOR INSERT TO authenticated
+  WITH CHECK (company_id = public.get_user_company_id() AND public.get_user_role() IN ('proprietario', 'administrador', 'financeiro', 'cobrador'));
 
 -- Inserir movimentações de caixa
 DROP POLICY IF EXISTS "Can insert cash_movements for own company" ON cash_movements;
