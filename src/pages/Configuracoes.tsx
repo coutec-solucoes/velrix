@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getAppData, updateSettings, addExchangeRateSnapshot, getExchangeRateHistory, onDataChange } from '@/services/storageService';
-import { AppSettings, Currency, Country, AppLanguage, ExchangeRateSnapshot, LateFeeSettings } from '@/types';
+import { AppSettings, Currency, Country, AppLanguage, ExchangeRateSnapshot, LateFeeSettings, ContractClause } from '@/types';
 import { useTranslation } from '@/hooks/useI18n';
-import { Save, Building2, Coins, Globe, CheckCircle2, ArrowRightLeft, ToggleLeft, ToggleRight, History, UserCog, Percent, Upload, Route, X as XIcon, BookOpen, CreditCard } from 'lucide-react';
+import { Save, Building2, Coins, Globe, CheckCircle2, ArrowRightLeft, ToggleLeft, ToggleRight, History, UserCog, Percent, Upload, Route, X as XIcon, BookOpen, CreditCard, FileText, Plus, Trash2, GripVertical } from 'lucide-react';
 import SaveButton from '@/components/SaveButton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -239,6 +239,7 @@ export default function Configuracoes() {
       <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList className="bg-muted mb-6">
           <TabsTrigger value="geral" className="gap-1.5"><Building2 size={14} />{t('cfg_company_data')}</TabsTrigger>
+          <TabsTrigger value="contrato" className="gap-1.5"><FileText size={14} />Contrato</TabsTrigger>
           <TabsTrigger value="usuarios" className="gap-1.5"><UserCog size={14} />{t('usr_tab')}</TabsTrigger>
           <TabsTrigger value="meu-plano" className="gap-1.5"><CreditCard size={14} />Meu Plano</TabsTrigger>
           <TabsTrigger value="manual" className="gap-1.5"><BookOpen size={14} />📚 Manual do Sistema</TabsTrigger>
@@ -667,6 +668,23 @@ export default function Configuracoes() {
       />
         </TabsContent>
 
+        <TabsContent value="contrato" className="space-y-6 max-w-3xl">
+          <ContractSettingsTab
+            contractTitle={company.contractTitle || ''}
+            contractClauses={company.contractClauses || []}
+            onTitleChange={(title) => updateCompany({ contractTitle: title })}
+            onClausesChange={(clauses) => updateCompany({ contractClauses: clauses })}
+            inputClass={inputClass}
+          />
+          <SaveButton
+            onClick={handleSave}
+            saving={saving}
+            label={saved ? t('cfg_saved') : t('cfg_save')}
+            icon={<Save size={18} />}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-secondary text-secondary-foreground font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
+          />
+        </TabsContent>
+
         <TabsContent value="usuarios">
           <Usuarios />
         </TabsContent>
@@ -679,6 +697,162 @@ export default function Configuracoes() {
           <ManualTreinamento />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/* ====================================================================
+   CONTRACT SETTINGS TAB — standalone sub-component
+   ==================================================================== */
+
+const DEFAULT_CLAUSES_TEXT: ContractClause[] = [
+  { id: 'c1', text: 'O DEVEDOR declara que reconhece a presente dívida como líquida, certa e exigível, comprometendo-se ao pagamento nas condições estabelecidas neste instrumento.' },
+  { id: 'c2', text: 'O não pagamento de qualquer parcela na data de vencimento acarretará a incidência de multa e juros moratórios conforme estipulado nas condições financeiras acima.' },
+  { id: 'c3', text: 'O DEVEDOR poderá efetuar o pagamento antecipado das parcelas, total ou parcialmente, com redução proporcional dos juros incidentes, mediante acordo prévio com o CREDOR.' },
+  { id: 'c4', text: 'A presente Confissão de Dívida constitui título executivo extrajudicial, nos termos do art. 784, inciso III, do Código de Processo Civil Brasileiro (Lei nº 13.105/2015).' },
+  { id: 'c5', text: 'Em caso de inadimplência, o CREDOR fica autorizado a adotar todas as medidas legais cabíveis para a recuperação do crédito, incluindo protesto em cartório, negativação em cadastros de inadimplentes e cobrança judicial ou extrajudicial.' },
+  { id: 'c6', text: 'Este instrumento é celebrado em caráter irrevogável e irretratável, obrigando as partes, seus herdeiros e sucessores a qualquer título.' },
+  { id: 'c7', text: 'As partes elegem o foro da comarca em que está estabelecido o CREDOR para dirimir quaisquer questões decorrentes do presente instrumento, renunciando a qualquer outro, por mais privilegiado que seja.' },
+];
+
+interface ContractSettingsTabProps {
+  contractTitle: string;
+  contractClauses: ContractClause[];
+  onTitleChange: (title: string) => void;
+  onClausesChange: (clauses: ContractClause[]) => void;
+  inputClass: string;
+}
+
+function ContractSettingsTab({ contractTitle, contractClauses, onTitleChange, onClausesChange, inputClass }: ContractSettingsTabProps) {
+  const clauses = contractClauses.length > 0 ? contractClauses : DEFAULT_CLAUSES_TEXT;
+  const isUsingDefaults = contractClauses.length === 0;
+
+  const addClause = () => {
+    onClausesChange([...clauses, { id: crypto.randomUUID(), text: '' }]);
+  };
+
+  const updateClause = (id: string, text: string) => {
+    onClausesChange(clauses.map((c) => (c.id === id ? { ...c, text } : c)));
+  };
+
+  const removeClause = (id: string) => {
+    onClausesChange(clauses.filter((c) => c.id !== id));
+  };
+
+  const moveClause = (id: string, dir: -1 | 1) => {
+    const idx = clauses.findIndex((c) => c.id === id);
+    if (idx < 0) return;
+    const next = idx + dir;
+    if (next < 0 || next >= clauses.length) return;
+    const arr = [...clauses];
+    [arr[idx], arr[next]] = [arr[next], arr[idx]];
+    onClausesChange(arr);
+  };
+
+  const restoreDefaults = () => {
+    onClausesChange([]);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Title */}
+      <div className="bg-card rounded-lg p-6 card-shadow border border-border space-y-4">
+        <div className="flex items-center gap-2 mb-1">
+          <FileText size={20} className="text-secondary" />
+          <h2 className="text-body font-semibold">Título do Documento</h2>
+        </div>
+        <p className="text-body-sm text-muted-foreground">
+          Nome que aparecerá no cabeçalho do contrato. Ex: <em>CONFISSÃO DE DÍVIDA</em>, <em>CONTRATO DE EMPRÉSTIMO</em>.
+        </p>
+        <input
+          value={contractTitle}
+          onChange={(e) => onTitleChange(e.target.value)}
+          placeholder="CONFISSÃO DE DÍVIDA"
+          className={inputClass}
+        />
+        {!contractTitle && (
+          <p className="text-xs text-muted-foreground">Usando padrão: <strong>CONFISSÃO DE DÍVIDA</strong></p>
+        )}
+      </div>
+
+      {/* Clauses editor */}
+      <div className="bg-card rounded-lg p-6 card-shadow border border-border space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <FileText size={20} className="text-secondary" />
+            <div>
+              <h2 className="text-body font-semibold">Cláusulas do Contrato</h2>
+              <p className="text-xs text-muted-foreground">
+                {isUsingDefaults ? 'Usando cláusulas padrão do sistema. Edite qualquer cláusula para personalizar.' : `${clauses.length} cláusula${clauses.length !== 1 ? 's' : ''} personalizadas`}
+              </p>
+            </div>
+          </div>
+          {!isUsingDefaults && (
+            <button
+              onClick={restoreDefaults}
+              className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+            >
+              Restaurar padrões
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {clauses.map((clause, idx) => (
+            <div key={clause.id} className="flex items-start gap-2">
+              <div className="flex flex-col gap-1 pt-2 flex-shrink-0">
+                <button
+                  onClick={() => moveClause(clause.id, -1)}
+                  disabled={idx === 0}
+                  className="p-0.5 rounded hover:bg-accent disabled:opacity-30 transition-colors"
+                  title="Mover para cima"
+                >
+                  <GripVertical size={14} className="text-muted-foreground rotate-90" />
+                </button>
+                <button
+                  onClick={() => moveClause(clause.id, 1)}
+                  disabled={idx === clauses.length - 1}
+                  className="p-0.5 rounded hover:bg-accent disabled:opacity-30 transition-colors"
+                  title="Mover para baixo"
+                >
+                  <GripVertical size={14} className="text-muted-foreground -rotate-90" />
+                </button>
+              </div>
+              <span className="text-xs font-bold text-muted-foreground pt-2.5 flex-shrink-0 w-5 text-right">
+                {idx + 1}.
+              </span>
+              <textarea
+                value={clause.text}
+                onChange={(e) => updateClause(clause.id, e.target.value)}
+                rows={3}
+                className={inputClass + ' flex-1 resize-none text-xs'}
+                placeholder={`Texto da cláusula ${idx + 1}...`}
+              />
+              <button
+                onClick={() => removeClause(clause.id)}
+                className="p-1.5 rounded hover:bg-destructive/10 text-destructive flex-shrink-0 mt-1 transition-colors"
+                title="Remover cláusula"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={addClause}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-border text-body-sm text-muted-foreground hover:border-secondary hover:text-secondary transition-colors w-full justify-center"
+        >
+          <Plus size={16} /> Adicionar Cláusula
+        </button>
+      </div>
+
+      {/* Preview note */}
+      <div className="bg-muted/40 rounded-lg p-4 border border-border text-xs text-muted-foreground space-y-1">
+        <p className="font-semibold text-foreground">Dica: Variáveis disponíveis nas cláusulas</p>
+        <p>As cláusulas são texto livre. Você pode mencionar nome do devedor, valor e condições — esses dados já aparecem automaticamente nas seções "Das Partes" e "Das Condições Financeiras" do documento.</p>
+        <p>Para contratos com juros ou multa específicos, mencione-os diretamente no texto da cláusula.</p>
+      </div>
     </div>
   );
 }

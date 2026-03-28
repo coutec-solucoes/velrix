@@ -93,6 +93,11 @@ export interface ExchangeRateSnapshot {
   rates: { pair: string; rate: number }[];
 }
 
+export interface ContractClause {
+  id: string;
+  text: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -110,6 +115,8 @@ export interface Company {
   planId?: string;
   planName?: string;
   planFeatures?: string;
+  contractTitle?: string;          // Document title, e.g. "CONFISSÃO DE DÍVIDA"
+  contractClauses?: ContractClause[]; // Custom clauses; null = use system defaults
 }
 
 export interface Client {

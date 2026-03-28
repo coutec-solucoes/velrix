@@ -1269,6 +1269,21 @@ BEGIN
 END;
 $$;`,
   },
+  // ========== MIGRATIONS v4 ==========
+  {
+    name: '_migrations_v4',
+    description: 'Adicionar contract_title e contract_clauses em companies',
+    sql: `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='contract_title') THEN
+    ALTER TABLE companies ADD COLUMN contract_title TEXT DEFAULT 'CONFISSÃO DE DÍVIDA';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='contract_clauses') THEN
+    ALTER TABLE companies ADD COLUMN contract_clauses JSONB DEFAULT '[]'::jsonb;
+  END IF;
+END;
+$$;`,
+  },
   // ========== REALTIME ==========
   {
     name: '_realtime',
