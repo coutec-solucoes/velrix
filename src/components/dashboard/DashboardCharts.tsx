@@ -12,10 +12,10 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { Transaction, Currency } from '@/types';
+import { Transaction, Currency, getPaymentMethodLabel } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getExchangeRate } from '@/utils/currencyConversion';
-import { BarChart3, PieChart as PieIcon } from 'lucide-react';
+import { BarChart3, PieChart as PieIcon, CreditCard } from 'lucide-react';
 
 interface DashboardChartsProps {
   transactions: Transaction[];
@@ -34,7 +34,7 @@ function getMonthLabel(date: Date): string {
 }
 
 export default function DashboardCharts({ transactions, primaryCurrency, categories, t }: DashboardChartsProps) {
-  const [activeChart, setActiveChart] = useState<'bar' | 'pie'>('bar');
+  const [activeChart, setActiveChart] = useState<'bar' | 'pie' | 'payment'>('bar');
 
   const convertToPrimary = (amount: number, currency: Currency) =>
     amount * getExchangeRate(currency, primaryCurrency);
@@ -68,6 +68,20 @@ export default function DashboardCharts({ transactions, primaryCurrency, categor
 
       return { label, receitas: Math.round(receitas * 100) / 100, despesas: Math.round(despesas * 100) / 100 };
     });
+  }, [transactions, primaryCurrency]);
+
+  // Payment method pie chart (paid transactions)
+  const paymentData = useMemo(() => {
+    const map: Record<string, number> = {};
+    transactions.forEach((tx) => {
+      if (tx.status !== 'pago') return;
+      const key = getPaymentMethodLabel(tx.paymentMethod);
+      map[key] = (map[key] || 0) + convertToPrimary(tx.amount, tx.currency);
+    });
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
   }, [transactions, primaryCurrency]);
 
   // Category pie chart
@@ -132,10 +146,10 @@ export default function DashboardCharts({ transactions, primaryCurrency, categor
   return (
     <div className="bg-card rounded-xl card-shadow border border-border p-5 space-y-4">
       {/* Header with toggle */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-title-section font-bold flex items-center gap-2">
-          {activeChart === 'bar' ? <BarChart3 size={18} /> : <PieIcon size={18} />}
-          {activeChart === 'bar' ? 'Receitas vs Despesas — Últimos 6 meses' : 'Despesas por Categoria'}
+          {activeChart === 'bar' ? <BarChart3 size={18} /> : activeChart === 'pie' ? <PieIcon size={18} /> : <CreditCard size={18} />}
+          {activeChart === 'bar' ? 'Receitas vs Despesas — Últimos 6 meses' : activeChart === 'pie' ? 'Despesas por Categoria' : 'Por Forma de Pagamento'}
         </h3>
         <div className="inline-flex rounded-lg border border-border overflow-hidden">
           <button
@@ -148,7 +162,13 @@ export default function DashboardCharts({ transactions, primaryCurrency, categor
             onClick={() => setActiveChart('pie')}
             className={`px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeChart === 'pie' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-accent text-muted-foreground'}`}
           >
-            <PieIcon size={14} /> Pizza
+            <PieIcon size={14} /> Categorias
+          </button>
+          <button
+            onClick={() => setActiveChart('payment')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeChart === 'payment' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-accent text-muted-foreground'}`}
+          >
+            <CreditCard size={14} /> Pagamento
           </button>
         </div>
       </div>
@@ -203,6 +223,40 @@ export default function DashboardCharts({ transactions, primaryCurrency, categor
         ) : (
           <div className="h-[260px] flex items-center justify-center text-muted-foreground text-sm">
             Nenhuma despesa no período selecionado
+          </div>
+        )
+      )}
+
+      {/* Payment Method Chart */}
+      {activeChart === 'payment' && (
+        paymentData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie
+                data={paymentData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={90}
+                innerRadius={40}
+                paddingAngle={2}
+              >
+                {paymentData.map((_, index) => (
+                  <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomPieTooltip />} />
+              <Legend
+                formatter={(value) => <span className="text-xs text-foreground">{value}</span>}
+                iconSize={10}
+                iconType="circle"
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[260px] flex items-center justify-center text-muted-foreground text-sm">
+            Nenhuma transação paga com forma de pagamento registrada
           </div>
         )
       )}

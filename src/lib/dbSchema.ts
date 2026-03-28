@@ -1067,6 +1067,7 @@ CREATE POLICY "Can delete bank_accounts for own company"
   description TEXT NOT NULL DEFAULT '',
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   cobrador_id UUID REFERENCES cobradores(id) ON DELETE SET NULL,
+  payment_method TEXT DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -1253,6 +1254,18 @@ BEGIN
   
   ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
   ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('proprietario', 'administrador', 'financeiro', 'visualizador', 'cobrador'));
+END;
+$$;`,
+  },
+  // ========== MIGRATIONS v3 ==========
+  {
+    name: '_migrations_v3',
+    description: 'Adicionar payment_method em cash_movements',
+    sql: `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cash_movements' AND column_name='payment_method') THEN
+    ALTER TABLE cash_movements ADD COLUMN payment_method TEXT DEFAULT '';
+  END IF;
 END;
 $$;`,
   },

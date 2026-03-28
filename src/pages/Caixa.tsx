@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import CurrencyFlag from '@/components/CurrencyFlag';
 import { addData, deleteData, updateData, getAppData, getDefaultCurrency, getUIShownCurrencies } from '@/services/storageService';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
-import { CashMovement, BankAccount, Currency, Transaction } from '@/types';
+import { CashMovement, BankAccount, Currency, Transaction, PAYMENT_METHODS, getPaymentMethodLabel } from '@/types';
 import { formatCurrency, formatDate, getStatusColor } from '@/utils/formatters';
 import { useTranslation } from '@/hooks/useI18n';
 import { useAuth } from '@/hooks/useAuth';
@@ -46,6 +46,7 @@ export default function Caixa() {
   const itemsPerPage = 15;
   const [filterBankAccount, setFilterBankAccount] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
   const [filterPendingCurrency, setFilterPendingCurrency] = useState('');
   const [filterDueDays, setFilterDueDays] = useState<'' | '7' | '15' | '30' | '60'>('');
   const [activeTab, setActiveTab] = useState<'movimentos' | 'pendentes'>('movimentos');
@@ -62,7 +63,9 @@ export default function Caixa() {
     description: '',
     bankAccountId: '',
     date: today(),
+    paymentMethod: '',
   });
+  const [baixaPaymentMethod, setBaixaPaymentMethod] = useState('');
 
   useEffect(() => {
     setActiveCurrencies(getUIShownCurrencies());
@@ -73,13 +76,14 @@ export default function Caixa() {
       .filter(m => (!dateFrom || m.date >= dateFrom) && (!dateTo || m.date <= dateTo))
       .filter(m => !filterBankAccount || m.bankAccountId === filterBankAccount)
       .filter(m => !filterType || m.type === filterType)
+      .filter(m => !filterPaymentMethod || m.paymentMethod === filterPaymentMethod)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [movements, dateFrom, dateTo, filterBankAccount, filterType]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateFrom, dateTo, filterBankAccount, filterType, activeTab]);
+  }, [dateFrom, dateTo, filterBankAccount, filterType, filterPaymentMethod, activeTab]);
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const paginatedMovements = useMemo(() => {
@@ -168,6 +172,7 @@ export default function Caixa() {
         description: form.description,
         bankAccountId: form.bankAccountId || undefined,
         date: form.date,
+        paymentMethod: form.paymentMethod || undefined,
         userId: user?.id,
         userName: user?.name,
         createdAt: new Date().toISOString(),
@@ -184,7 +189,7 @@ export default function Caixa() {
       }
 
       setShowModal(false);
-      setForm({ type: 'entrada', amount: 0, currency: getDefaultCurrency(), description: '', bankAccountId: '', date: today() });
+      setForm({ type: 'entrada', amount: 0, currency: getDefaultCurrency(), description: '', bankAccountId: '', date: today(), paymentMethod: '' });
       refreshMovements();
     } finally { setSaving(false); }
   };
@@ -244,6 +249,7 @@ export default function Caixa() {
     setBaixaTx(tx);
     setBaixaBankAccountId('');
     setBaixaDate(today());
+    setBaixaPaymentMethod('');
     setShowBaixaModal(true);
   };
 
@@ -259,6 +265,7 @@ export default function Caixa() {
         status: 'pago',
         paidAt: baixaDate,
         bankAccountId: baixaBankAccountId || undefined,
+        paymentMethod: baixaPaymentMethod || undefined,
       } as any);
 
       if (baixaBankAccountId) {
@@ -279,6 +286,7 @@ export default function Caixa() {
           currency: movCurrency,
           description: `Baixa: ${baixaTx.description}${convDesc}`,
           date: baixaDate,
+          paymentMethod: baixaPaymentMethod || undefined,
           userId: user?.id,
           userName: user?.name,
           createdAt: new Date().toISOString(),
@@ -436,6 +444,19 @@ export default function Caixa() {
               </select>
             </div>
             <div className="flex items-center gap-2">
+              <label className="text-body-sm text-muted-foreground">Pagamento:</label>
+              <select
+                value={filterPaymentMethod}
+                onChange={e => setFilterPaymentMethod(e.target.value)}
+                className={inputClass + ' w-auto'}
+              >
+                <option value="">Todos</option>
+                {PAYMENT_METHODS.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
               <label className="text-body-sm text-muted-foreground">De:</label>
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={inputClass + ' w-auto'} />
             </div>
@@ -443,9 +464,9 @@ export default function Caixa() {
               <label className="text-body-sm text-muted-foreground">Até:</label>
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={inputClass + ' w-auto'} />
             </div>
-            {(dateFrom || dateTo || filterBankAccount || filterType) && (
+            {(dateFrom || dateTo || filterBankAccount || filterType || filterPaymentMethod) && (
               <button
-                onClick={() => { setDateFrom(''); setDateTo(''); setFilterBankAccount(''); setFilterType(''); }}
+                onClick={() => { setDateFrom(''); setDateTo(''); setFilterBankAccount(''); setFilterType(''); setFilterPaymentMethod(''); }}
                 className="text-body-sm text-muted-foreground hover:text-foreground transition-colors underline"
               >
                 Limpar filtros
@@ -465,6 +486,7 @@ export default function Caixa() {
                     <th className="text-left p-3 font-medium text-muted-foreground">Descrição</th>
                     <th className="text-center p-3 font-medium text-muted-foreground">Tipo</th>
                     <th className="text-left p-3 font-medium text-muted-foreground hidden md:table-cell">Conta</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground hidden lg:table-cell">Pagamento</th>
                     <th className="text-right p-3 font-medium text-muted-foreground">Valor</th>
                     <th className="text-center p-3 font-medium text-muted-foreground">Ações</th>
                   </tr>
@@ -481,6 +503,11 @@ export default function Caixa() {
                         </span>
                       </td>
                       <td className="p-3 text-muted-foreground hidden md:table-cell">{accountName(m.bankAccountId)}</td>
+                      <td className="p-3 text-muted-foreground hidden lg:table-cell">
+                        {m.paymentMethod ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-foreground">{getPaymentMethodLabel(m.paymentMethod)}</span>
+                        ) : '—'}
+                      </td>
                       <td className={`p-3 text-right font-semibold ${m.type === 'entrada' ? 'text-success' : 'text-destructive'}`}>
                         <span className="inline-flex items-center gap-1.5 justify-end">
                           <CurrencyFlag currency={m.currency} size="sm" showCode={false} />
@@ -733,6 +760,13 @@ export default function Caixa() {
                   <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className={inputClass} />
                 </div>
               </div>
+              <div>
+                <label className="block text-body-sm font-medium mb-1">Forma de Pagamento</label>
+                <select value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })} className={inputClass}>
+                  <option value="">Não informado</option>
+                  {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
               <div className="flex gap-3 pt-2">
                 <SaveButton onClick={handleSave} saving={saving} label={t('common_create')} />
                 <button onClick={() => setShowModal(false)} className="px-4 py-2.5 rounded-lg border border-border font-medium hover:bg-accent transition-colors">
@@ -786,6 +820,13 @@ export default function Caixa() {
               <div>
                 <label className="block text-body-sm font-medium mb-1">Data do {baixaTx.type === 'receita' ? 'Recebimento' : 'Pagamento'}</label>
                 <input type="date" value={baixaDate} onChange={e => setBaixaDate(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-body-sm font-medium mb-1">Forma de Pagamento</label>
+                <select value={baixaPaymentMethod} onChange={e => setBaixaPaymentMethod(e.target.value)} className={inputClass}>
+                  <option value="">Não informado</option>
+                  {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
               </div>
               <div className="flex gap-3 pt-2">
                 <SaveButton onClick={confirmBaixa} saving={saving} label={baixaTx.type === 'receita' ? 'Confirmar Recebimento' : 'Confirmar Pagamento'} />

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { getAppData } from '@/services/storageService';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import { Currency, Transaction, Client, BankAccount, CashMovement } from '@/types';
+import { Currency, Transaction, Client, BankAccount, CashMovement, getPaymentMethodLabel, PAYMENT_METHODS } from '@/types';
 import CurrencyFlag from '@/components/CurrencyFlag';
 import { useTranslation } from '@/hooks/useI18n';
 import jsPDF from 'jspdf';
@@ -651,11 +651,22 @@ function CaixaReport({
     return { currency: cur, entradas, saidas, saldo: entradas - saidas, count: curMvs.length };
   });
 
+  const paymentSummary = useMemo(() => {
+    const map: Record<string, number> = {};
+    movements.forEach((m) => {
+      const k = m.paymentMethod || 'nao_informado';
+      map[k] = (map[k] || 0) + m.amount;
+    });
+    return Object.entries(map)
+      .map(([method, total]) => ({ method, label: getPaymentMethodLabel(method === 'nao_informado' ? undefined : method), total }))
+      .sort((a, b) => b.total - a.total);
+  }, [movements]);
+
   const handleCSV = () => {
-    const headers = ['Data', 'Tipo', 'Descrição', 'Conta', 'Moeda', 'Valor'];
+    const headers = ['Data', 'Tipo', 'Descrição', 'Conta', 'Forma de Pagamento', 'Moeda', 'Valor'];
     const rows = movements
       .sort((a, b) => (a.date || a.createdAt).localeCompare(b.date || b.createdAt))
-      .map((m) => [formatDate(m.date || m.createdAt), m.type, m.description, accountMap[m.bankAccountId || ''] || '-', m.currency, m.amount.toFixed(2)]);
+      .map((m) => [formatDate(m.date || m.createdAt), m.type, m.description, accountMap[m.bankAccountId || ''] || '-', getPaymentMethodLabel(m.paymentMethod), m.currency, m.amount.toFixed(2)]);
     exportCSV('relatorio-caixa', headers, rows);
   };
 
@@ -690,16 +701,17 @@ function CaixaReport({
     const sorted = [...movements].sort((a, b) => (a.date || a.createdAt).localeCompare(b.date || b.createdAt));
     autoTable(doc, {
       startY,
-      head: [['Data', 'Tipo', 'Descrição', 'Conta', 'Moeda', 'Valor']],
+      head: [['Data', 'Tipo', 'Descrição', 'Conta', 'Pagamento', 'Moeda', 'Valor']],
       body: sorted.map((m) => [
         formatDate(m.date || m.createdAt), m.type, m.description,
-        accountMap[m.bankAccountId || ''] || '-', currencyLabelPdf[m.currency] || m.currency,
+        accountMap[m.bankAccountId || ''] || '-', getPaymentMethodLabel(m.paymentMethod),
+        currencyLabelPdf[m.currency] || m.currency,
         `${m.type === 'entrada' ? '+' : '-'}${formatCurrency(m.amount, m.currency)}`,
       ]),
       styles: { fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [30, 58, 95], textColor: 255 },
       alternateRowStyles: { fillColor: [245, 247, 250] },
-      columnStyles: { 5: { halign: 'right' } },
+      columnStyles: { 6: { halign: 'right' } },
     });
 
     addPdfFooter(doc, t);
@@ -742,6 +754,26 @@ function CaixaReport({
         ))}
       </div>
 
+      {/* Payment method breakdown */}
+      {paymentSummary.length > 0 && (
+        <div className="bg-card rounded-xl p-5 border border-border card-shadow">
+          <h3 className="font-semibold text-body mb-3">Por Forma de Pagamento</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {paymentSummary.map(({ method, label, total }) => {
+              const cur = movements.find((m) => (m.paymentMethod || 'nao_informado') === method)?.currency || 'BRL';
+              const count = movements.filter((m) => (m.paymentMethod || 'nao_informado') === method).length;
+              return (
+                <div key={method} className="rounded-lg border border-border p-3 space-y-1">
+                  <p className="text-xs font-semibold text-foreground">{label}</p>
+                  <p className="text-body-sm font-bold text-secondary">{formatCurrency(total, cur)}</p>
+                  <p className="text-xs text-muted-foreground">{count} mov.</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Movement list */}
       <div className="bg-card rounded-xl p-5 border border-border card-shadow">
         <h3 className="font-semibold text-body mb-3">Movimentações</h3>
@@ -753,6 +785,7 @@ function CaixaReport({
                 <th className="pb-2 font-medium">Tipo</th>
                 <th className="pb-2 font-medium">Descrição</th>
                 <th className="pb-2 font-medium">Conta</th>
+                <th className="pb-2 font-medium">Pagamento</th>
                 <th className="pb-2 font-medium text-right">Valor</th>
               </tr>
             </thead>
@@ -768,8 +801,9 @@ function CaixaReport({
                         {m.type}
                       </span>
                     </td>
-                    <td className="py-2 max-w-[250px] truncate">{m.description}</td>
+                    <td className="py-2 max-w-[200px] truncate">{m.description}</td>
                     <td className="py-2 text-muted-foreground">{accountMap[m.bankAccountId || ''] || '-'}</td>
+                    <td className="py-2 text-muted-foreground text-xs">{getPaymentMethodLabel(m.paymentMethod)}</td>
                     <td className={`py-2 text-right font-medium ${m.type === 'entrada' ? 'text-success' : 'text-destructive'}`}>
                       {m.type === 'entrada' ? '+' : '-'}{formatCurrency(m.amount, m.currency)}
                     </td>

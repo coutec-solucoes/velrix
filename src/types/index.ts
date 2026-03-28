@@ -204,6 +204,25 @@ export interface BankAccount {
   createdAt: string;
 }
 
+export const PAYMENT_METHODS = [
+  { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'pix', label: 'PIX' },
+  { value: 'transferencia_bancaria', label: 'Transferência Bancária' },
+  { value: 'deposito', label: 'Depósito Bancário' },
+  { value: 'cartao_credito', label: 'Cartão de Crédito' },
+  { value: 'cartao_debito', label: 'Cartão de Débito' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'boleto', label: 'Boleto' },
+  { value: 'outros', label: 'Outros' },
+] as const;
+
+export type PaymentMethodValue = typeof PAYMENT_METHODS[number]['value'];
+
+export function getPaymentMethodLabel(value?: string): string {
+  if (!value) return '—';
+  return PAYMENT_METHODS.find((m) => m.value === value)?.label ?? value;
+}
+
 export interface CashMovement {
   id: string;
   transactionId?: string;
@@ -213,6 +232,7 @@ export interface CashMovement {
   currency: Currency;
   description: string;
   date: string;
+  paymentMethod?: string;
   userId?: string;
   userName?: string;
   cobradorId?: string;
