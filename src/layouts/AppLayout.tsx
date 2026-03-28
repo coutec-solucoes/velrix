@@ -121,8 +121,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
     return menuItems.filter(item => {
       if (!isModuleAllowed(item.module)) return false;
       return canView(item.module);
+    }).map(item => {
+      if (item.module === 'cobradores' && (user?.role as string) === 'cobrador') {
+        return { ...item, path: '/area-cobrador', labelKey: 'menu_cobradores' as TranslationKey };
+      }
+      return item;
     });
-  }, [appData.settings?.company, appData.settings?.cobradoresEnabled, canView]);
+  }, [appData.settings?.company, appData.settings?.cobradoresEnabled, canView, user?.role]);
 
   return (
     <div className="min-h-screen flex bg-background">
