@@ -38,8 +38,16 @@ export default function AreaCobrador() {
     window.print();
   };
 
-  // Find the cobrador entity for the logged in user
-  const cobrador = useMemo(() => cobradores.find(c => c.userId === user?.id), [cobradores, user]);
+  // Find the company user record by email
+  const [allUsers] = useRealtimeData('users');
+  const appUser = useMemo(() => allUsers.find(u => u.email === user?.email), [allUsers, user]);
+
+  // Find the cobrador entity linked to this users.id
+  const cobrador = useMemo(() => {
+    // If we have an appUser, use its ID. Otherwise, fallback to the auth user.id (for legacy owners)
+    const targetId = appUser?.id || user?.id;
+    return cobradores.find(c => c.userId === targetId);
+  }, [cobradores, appUser, user]);
 
   // Clients assigned to this cobrador
   const myClients = useMemo(() => {
