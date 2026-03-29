@@ -138,6 +138,7 @@ function toCamelCase(obj: Record<string, any>): Record<string, any> {
 
 const COMPANY_SCOPED_TABLES = new Set(['users', 'clients', 'transactions', 'contracts', 'categories', 'bank_accounts', 'cash_movements', 'audit_logs', 'cobradores']);
 let cachedCompanyContext: { userId: string | null; companyId: string | null; companyName: string | null } | null = null;
+let _companyContextPromise: Promise<{ companyId: string | null; companyName: string | null }> | null = null;
 
 async function getCurrentCompanyId(): Promise<string | null> {
   const ctx = await getCompanyContext();
@@ -145,44 +146,56 @@ async function getCurrentCompanyId(): Promise<string | null> {
 }
 
 async function getCompanyContext(): Promise<{ companyId: string | null; companyName: string | null }> {
-  const supabase = getSupabase();
-  if (!supabase) return { companyId: null, companyName: null };
-
-  const { data: { user } } = await supabase.auth.getUser();
-  const userId = user?.id ?? null;
-
-  if (cachedCompanyContext && cachedCompanyContext.userId === userId) {
-    return { companyId: cachedCompanyContext.companyId, companyName: cachedCompanyContext.companyName };
+  if (_companyContextPromise) {
+    return _companyContextPromise;
   }
 
-  if (!user) {
-    return { companyId: null, companyName: null };
-  }
+  _companyContextPromise = (async () => {
+    const supabase = getSupabase();
+    if (!supabase) return { companyId: null, companyName: null };
 
-  let { data: companyId, error } = await supabase.rpc('get_user_company_id');
-  if (error) {
-    console.error('[Supabase] get_user_company_id failed:', error.message);
-    cachedCompanyContext = { userId, companyId: null, companyName: null };
-    return { companyId: null, companyName: null };
-  }
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id ?? null;
 
-  if (!companyId) {
-    console.warn('[Supabase] get_user_company_id returned NULL, attempting auto-repair for user:', userId);
-    const { data: repairData } = await supabase.rpc('ensure_profile_exists');
-    if (repairData?.success) {
-      const { data: retryId } = await supabase.rpc('get_user_company_id');
-      if (retryId) companyId = retryId;
+    if (cachedCompanyContext && cachedCompanyContext.userId === userId) {
+      return { companyId: cachedCompanyContext.companyId, companyName: cachedCompanyContext.companyName };
     }
-  }
 
-  let companyName: string | null = null;
-  if (companyId) {
-    const { data: companyData } = await supabase.from('companies').select('name').eq('id', companyId).maybeSingle();
-    companyName = companyData?.name ?? null;
-  }
+    if (!user) {
+      return { companyId: null, companyName: null };
+    }
 
-  cachedCompanyContext = { userId, companyId: companyId ?? null, companyName };
-  return { companyId: companyId ?? null, companyName };
+    let { data: companyId, error } = await supabase.rpc('get_user_company_id');
+    if (error) {
+      console.error('[Supabase] get_user_company_id failed:', error.message);
+      cachedCompanyContext = { userId, companyId: null, companyName: null };
+      return { companyId: null, companyName: null };
+    }
+
+    if (!companyId) {
+      console.warn('[Supabase] get_user_company_id returned NULL, attempting auto-repair for user:', userId);
+      const { data: repairData } = await supabase.rpc('ensure_profile_exists');
+      if (repairData?.success) {
+        const { data: retryId } = await supabase.rpc('get_user_company_id');
+        if (retryId) companyId = retryId;
+      }
+    }
+
+    let companyName: string | null = null;
+    if (companyId) {
+      const { data: companyData } = await supabase.from('companies').select('name').eq('id', companyId).maybeSingle();
+      companyName = companyData?.name ?? null;
+    }
+
+    cachedCompanyContext = { userId, companyId: companyId ?? null, companyName };
+    return { companyId: companyId ?? null, companyName };
+  })();
+
+  try {
+    return await _companyContextPromise;
+  } finally {
+    _companyContextPromise = null;
+  }
 }
 
 export function clearCompanyCache() {
