@@ -201,7 +201,7 @@ export default function AreaCobrador() {
         paymentMethod: 'dinheiro', // Sangrias from cobrador are usually cash
         bankAccountId: selectedAccount.id,
         cobradorId: cobrador?.id,
-        userId: user?.id,
+        // userId: user?.id, -> Removido pois column 'user_id' não existe na tabela transactions (apenas na cash_movements)
         createdAt: new Date().toISOString(),
       });
 
