@@ -607,7 +607,7 @@ export default function AreaCobrador() {
               const cashCurrencies = Array.from(new Set([
                 ...Object.keys(groupedCash.cash),
                 ...Object.keys(groupedSangrias),
-                ...myCaixas.map(c => c.currency)
+                ...myCaixas.filter(c => c.currentBalance > 0).map(c => c.currency)
               ]));
               
               if (cashCurrencies.length === 0) {
