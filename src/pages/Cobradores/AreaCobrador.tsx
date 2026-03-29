@@ -64,7 +64,9 @@ export default function AreaCobrador() {
     if (!window.confirm("Atenção! Isso irá transferir TODO o saldo em espécie para o Caixa Principal da empresa. Você está com os valores físicos corretos para entregar?")) return;
     setSaving(true);
     try {
-      const mainCaixaFallbacks = bankAccounts.filter(a => a.accountType === 'caixa' && !a.name.includes(cobrador?.name || ''));
+      // O destino do dinheiro do cobrador pode ser tanto 'caixa' físico da empresa quanto a 'corrente' principal.
+      // Pegamos todas as contas que NÃO pertencem a nenhum cobrador para receber o Repasse.
+      const mainCaixaFallbacks = bankAccounts.filter(a => !cobradores.some(c => a.name.includes(c.name)));
       const date = new Date().toISOString().split('T')[0];
       
       for (const caixa of myCaixas) {
