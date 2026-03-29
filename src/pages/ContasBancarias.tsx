@@ -19,6 +19,8 @@ const emptyAccount: Omit<BankAccount, 'id' | 'createdAt'> = {
 
 export default function ContasBancarias() {
   const [accounts, refreshAccounts] = useRealtimeData('bankAccounts');
+  const [cobradores] = useRealtimeData('cobradores');
+  const [activeTab, setActiveTab] = useState<'empresa' | 'cobradores'>('empresa');
   const [activeCurrencies, setActiveCurrencies] = useState<Currency[]>(['BRL']);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<BankAccount | null>(null);
@@ -133,8 +135,17 @@ export default function ContasBancarias() {
     return 'Corrente';
   };
 
+  const isCobradorBox = (acc: BankAccount) => {
+    return acc.accountType === 'caixa' && cobradores.some(c => acc.name.includes(c.name));
+  };
+
+  const filteredAccounts = accounts.filter(acc => {
+    if (activeTab === 'empresa') return !isCobradorBox(acc);
+    return isCobradorBox(acc);
+  });
+
   const totalByCurrency: Record<string, number> = {};
-  accounts.forEach(acc => {
+  filteredAccounts.forEach(acc => {
     if (acc.active) {
       totalByCurrency[acc.currency] = (totalByCurrency[acc.currency] || 0) + acc.currentBalance;
     }
@@ -151,6 +162,22 @@ export default function ContasBancarias() {
             <Plus size={18} /> Nova Conta
           </button>
         )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-6 border-b border-border">
+        <button 
+          onClick={() => setActiveTab('empresa')} 
+          className={`pb-2 text-body-sm pt-2 font-medium border-b-2 transition-colors ${activeTab === 'empresa' ? 'border-secondary text-secondary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        >
+          Contas da Empresa
+        </button>
+        <button 
+          onClick={() => setActiveTab('cobradores')} 
+          className={`pb-2 text-body-sm pt-2 font-medium border-b-2 transition-colors ${activeTab === 'cobradores' ? 'border-secondary text-secondary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        >
+          Mochilas de Cobradores
+        </button>
       </div>
 
       {/* Summary cards */}
@@ -170,8 +197,8 @@ export default function ContasBancarias() {
 
       {/* Accounts list */}
       <div className="bg-card rounded-lg card-shadow border border-border overflow-x-auto">
-        {accounts.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground text-body-sm">Nenhuma conta bancária cadastrada.</div>
+        {filteredAccounts.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground text-body-sm">Nenhuma conta encontrada nesta categoria.</div>
         ) : (
           <table className="w-full text-body-sm">
             <thead>
@@ -185,7 +212,7 @@ export default function ContasBancarias() {
               </tr>
             </thead>
             <tbody>
-              {accounts.map(acc => (
+              {filteredAccounts.map(acc => (
                 <tr key={acc.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="p-3 font-medium">{acc.name}</td>
                   <td className="p-3 text-muted-foreground hidden md:table-cell">{acc.bankName || '—'}</td>
