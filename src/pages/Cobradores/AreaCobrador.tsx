@@ -652,14 +652,17 @@ export default function AreaCobrador() {
                           <h5 className="text-xs font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2 border-b border-border/40 pb-2 print:text-black print:border-black"><CheckCircle size={14} className="text-success print:text-black"/> Lista de Recebimentos</h5>
                           {txs.length === 0 ? <p className="text-xs text-muted-foreground italic print:text-black">Nenhum recebimento.</p> : (
                              <ul className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar print:max-h-none print:overflow-visible">
-                               {txs.map(t => (
+                               {txs.map(t => {
+                                  const clientName = clients.find(c => c.id === t.clientId)?.name || 'Cliente';
+                                  return (
                                   <li key={t.id} className="flex justify-between items-center text-xs border-b border-border/30 pb-1.5 hover:bg-muted/30 transition-colors print:border-black">
-                                    <span className="truncate pr-2 font-medium print:text-black" title={t.description || t.clientName || 'Cobrança'}>
-                                      {t.clientName || 'Cliente'} {t.installments > 1 ? `(${t.currentInstallment}/${t.installments})` : ''}
+                                    <span className="truncate pr-2 font-medium print:text-black" title={t.description || clientName}>
+                                      {clientName} {t.installments > 1 ? `(${t.currentInstallment}/${t.installments})` : ''}
                                     </span>
                                     <span className="font-bold text-success tabular-nums print:text-black">{formatCurrency(t.amount, currency as Currency)}</span>
                                   </li>
-                               ))}
+                                  );
+                               })}
                              </ul>
                           )}
                        </div>

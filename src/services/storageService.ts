@@ -431,7 +431,10 @@ export async function addData<K extends keyof AppData>(key: K, item: any): Promi
           ? supabase.from(table).insert(scopedRow)
           : supabase.from(table).upsert(scopedRow, { onConflict: 'id' });
         const { error } = await query;
-        if (error) { syncError = error.message; }
+        if (error) { 
+          syncError = error.message;
+          console.error(`[Supabase] Erro ao inserir na tabela ${table}:`, error, { row: scopedRow });
+        }
         else { syncOk = true; }
       } else { syncError = 'company_id não encontrado'; }
     } catch (err: any) { syncError = err?.message || 'Erro de conexão'; }
@@ -484,7 +487,10 @@ export async function updateData<K extends keyof AppData>(
           query = supabase.from(table).upsert(scopedRow, { onConflict: 'id' });
         }
         const { error } = await query;
-        if (error) { syncError = error.message; }
+        if (error) { 
+          syncError = error.message;
+          console.error(`[Supabase] Erro ao atualizar na tabela ${table}:`, error, { id, updates, row: scopedRow });
+        }
         else { syncOk = true; }
       } else { syncError = 'company_id não encontrado'; }
     } catch (err: any) { syncError = err?.message || 'Erro de conexão'; }
