@@ -93,10 +93,18 @@ export default function Contratos() {
     if (!signatureData && !companySignatureData) return;
     setSaving(true);
     try {
+      const hasClient = !!signatureData || !!signContract.signatureData;
+      const hasCompany = !!companySignatureData || !!signContract.companySignatureData;
+      const newStatus = (hasClient && hasCompany) ? 'assinado' : 'aguardando_assinatura';
+
       const updatePayload: any = {
-        signedAt: new Date().toISOString(),
-        status: 'assinado' as ContractStatus,
+        status: newStatus as ContractStatus,
       };
+
+      if (newStatus === 'assinado' && !signContract.signedAt) {
+        updatePayload.signedAt = new Date().toISOString();
+      }
+
       if (signatureData) updatePayload.signatureData = signatureData;
       if (companySignatureData) updatePayload.companySignatureData = companySignatureData;
       const result = await updateData('contracts', signContract.id, updatePayload);
@@ -366,14 +374,27 @@ export default function Contratos() {
                   <p className="text-xs text-muted-foreground mt-1">Cliente: {client.name}</p>
                   <p className="text-body font-bold mt-1">{formatCurrency(signContract.amount, signContract.currency)}</p>
                 </div>
-                <div>
-                  <label className="block text-body-sm font-medium mb-2">Assinatura do Empresário / Credor</label>
-                  <SignaturePad onSignatureChange={setCompanySignatureData} />
-                </div>
-                <div>
-                  <label className="block text-body-sm font-medium mb-2">Assinatura do Cliente</label>
-                  <SignaturePad onSignatureChange={setSignatureData} />
-                </div>
+                {signContract.companySignatureData ? (
+                  <div className="p-3 bg-success/10 text-success rounded-lg border border-success/20 text-sm font-medium flex items-center gap-2">
+                    <FileCheck size={16} /> Credor já assinou
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-body-sm font-medium mb-2">Assinatura do Empresário / Credor</label>
+                    <SignaturePad onSignatureChange={setCompanySignatureData} />
+                  </div>
+                )}
+                
+                {signContract.signatureData ? (
+                  <div className="p-3 bg-success/10 text-success rounded-lg border border-success/20 text-sm font-medium flex items-center gap-2">
+                    <FileCheck size={16} /> Cliente já assinou via Link
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-body-sm font-medium mb-2">Assinatura do Cliente</label>
+                    <SignaturePad onSignatureChange={setSignatureData} />
+                  </div>
+                )}
                 <div className="flex gap-3 pt-2">
                   <SaveButton onClick={handleSign} saving={saving} label="Confirmar Assinaturas" disabled={!signatureData && !companySignatureData} />
                   <button onClick={() => setSignContract(null)} className="px-4 py-2.5 rounded-lg border border-border font-medium hover:bg-accent transition-colors">{t('common_cancel')}</button>

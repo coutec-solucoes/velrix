@@ -61,7 +61,7 @@ export default function AssinarContrato() {
 
       setContract(contractData);
 
-      if (contractData.status === 'assinado') {
+      if (contractData.signatureData) {
         setSigned(true);
       }
 
@@ -112,12 +112,15 @@ export default function AssinarContrato() {
     if (!contract || !signatureData) return;
     setSaving(true);
     try {
+      const newStatus = contract.companySignatureData ? 'assinado' : 'aguardando_assinatura';
+      const signedAtDate = newStatus === 'assinado' ? new Date().toISOString() : null;
+
       const { error: uErr } = await supabase
         .from('contracts')
         .update({
           signature_data: signatureData,
-          signed_at: new Date().toISOString(),
-          status: 'assinado',
+          signed_at: signedAtDate,
+          status: newStatus,
         })
         .eq('id', contract.id)
         .eq('signing_token', token); // double-check token
@@ -128,7 +131,7 @@ export default function AssinarContrato() {
       }
 
       setSigned(true);
-      setContract({ ...contract, signatureData, signedAt: new Date().toISOString(), status: 'assinado' });
+      setContract({ ...contract, signatureData, status: newStatus, signedAt: signedAtDate || contract.signedAt });
     } catch (err: any) {
       setError(err.message || 'Erro ao salvar assinatura');
     } finally {
