@@ -38,6 +38,8 @@ export default function AreaCobrador() {
   const [showSangriaModal, setShowSangriaModal] = useState(false);
   const [sangriaForm, setSangriaForm] = useState({ amount: '', currency: 'BRL', description: '', bankAccountId: '' });
   const [savingSangria, setSavingSangria] = useState(false);
+  const [showFechamentoModal, setShowFechamentoModal] = useState(false);
+  const [fechamentoDestinations, setFechamentoDestinations] = useState<Record<string, string>>({});
 
   // Print Ref
   const handlePrintFechamento = () => {
@@ -60,26 +62,44 @@ export default function AreaCobrador() {
     return bankAccounts.filter(a => a.accountType === 'caixa' && a.name.includes(cobrador.name));
   }, [bankAccounts, cobrador]);
 
-  const handleFechamentoDefinitivo = async () => {
-    if (!window.confirm("Atenção! Isso irá transferir TODO o saldo em espécie para o Caixa Principal da empresa. Você está com os valores físicos corretos para entregar?")) return;
+  const companyAccounts = useMemo(() => {
+    return bankAccounts.filter(a => !cobradores.some(c => a.name.includes(c.name)));
+  }, [bankAccounts, cobradores]);
+
+  const activeCaixas = useMemo(() => myCaixas.filter(c => c.currentBalance > 0), [myCaixas]);
+
+  const openFechamentoModal = () => {
+    if (activeCaixas.length === 0) {
+      alert("Suas mochilas já estão esvaziadas (saldo 0,00). Não há dinheiro físico para fechar no sistema.");
+      return;
+    }
+    const initialDestinations: Record<string, string> = {};
+    activeCaixas.forEach(caixa => {
+      const fallback = companyAccounts.find(a => a.currency === caixa.currency)?.id || companyAccounts[0]?.id || '';
+      initialDestinations[caixa.id] = fallback;
+    });
+    setFechamentoDestinations(initialDestinations);
+    setShowFechamentoModal(true);
+  };
+
+  const confirmFechamentoSubmit = async () => {
+    for (const caixa of activeCaixas) {
+      if (!fechamentoDestinations[caixa.id]) {
+         alert(`Selecione uma conta de destino para a mochila ${caixa.name}`);
+         return;
+      }
+    }
+
+    if (!window.confirm("Atenção! Isso irá transferir TODO o saldo em espécie para as contas selecionadas. Confirmar fechamento?")) return;
     setSaving(true);
     try {
-      // O destino do dinheiro do cobrador pode ser tanto 'caixa' físico da empresa quanto a 'corrente' principal.
-      // Pegamos todas as contas que NÃO pertencem a nenhum cobrador para receber o Repasse.
-      const mainCaixaFallbacks = bankAccounts.filter(a => !cobradores.some(c => a.name.includes(c.name)));
       const date = new Date().toISOString().split('T')[0];
       
-      for (const caixa of myCaixas) {
-        if (caixa.currentBalance <= 0) continue;
+      for (const caixa of activeCaixas) {
+        const destAccountId = fechamentoDestinations[caixa.id];
+        const targetMainCaixa = bankAccounts.find(a => a.id === destAccountId);
         
-        let targetMainCaixa = mainCaixaFallbacks.find(a => a.currency === caixa.currency);
-        if (!targetMainCaixa) {
-            targetMainCaixa = mainCaixaFallbacks[0]; // best effort se não houver da mesma moeda
-        }
-        if (!targetMainCaixa) {
-           alert('Erro: Nenhum Caixa Financeiro da Empresa encontrado para receber o dinheiro. Fale com o Financeiro.');
-           break;
-        }
+        if (!targetMainCaixa) continue;
 
         const amountToTransfer = caixa.currentBalance;
 
@@ -128,6 +148,7 @@ export default function AreaCobrador() {
         });
       }
       showSyncResult({ success: true, localOnly: false }, 'Caixas físicos esvaziados e dinheiro repassado!');
+      setShowFechamentoModal(false);
     } finally { setSaving(false); }
   };
 
@@ -696,7 +717,7 @@ export default function AreaCobrador() {
             )}
             {myCaixas.some(c => c.currentBalance > 0) && (
               <button 
-                onClick={handleFechamentoDefinitivo}
+                onClick={openFechamentoModal}
                 disabled={saving}
                 className="w-full mb-2 bg-success text-success-foreground font-bold py-3.5 rounded-xl card-shadow hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2 print:hidden"
               >
@@ -1006,6 +1027,62 @@ export default function AreaCobrador() {
                 className="flex-1 px-4 py-2 bg-warning text-warning-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {savingSangria ? 'Registrando...' : 'Confirmar Sangria'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fechamento Destinos Modal */}
+      {showFechamentoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm" onClick={() => setShowFechamentoModal(false)}>
+          <div className="bg-card rounded-xl card-shadow w-full max-w-md mx-4 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div>
+                <h3 className="text-title-section">Repasse de Fechamento</h3>
+              </div>
+              <button onClick={() => setShowFechamentoModal(false)} className="p-1.5 rounded hover:bg-accent transition-colors">
+                <X size={20} className="text-muted-foreground" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-body-sm text-muted-foreground mb-4">Escolha a conta destino onde o dinheiro físico desta mochila será entregue:</p>
+              
+              {activeCaixas.map(caixa => (
+                <div key={caixa.id} className="p-3 border border-border rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-body-sm font-medium">{caixa.name}</span>
+                    <span className="text-body font-bold">{formatCurrency(caixa.currentBalance, caixa.currency)}</span>
+                  </div>
+                  <select
+                    value={fechamentoDestinations[caixa.id] || ''}
+                    onChange={(e) => setFechamentoDestinations({ ...fechamentoDestinations, [caixa.id]: e.target.value })}
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
+                  >
+                    <option value="">Selecione a conta destino...</option>
+                    {companyAccounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+
+            </div>
+            <div className="flex gap-2 p-4 border-t border-border bg-muted/30">
+              <button 
+                type="button" 
+                onClick={() => setShowFechamentoModal(false)}
+                className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-accent transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                onClick={confirmFechamentoSubmit}
+                disabled={saving || activeCaixas.some(c => !fechamentoDestinations[c.id])}
+                className="flex-1 px-4 py-2 bg-success text-success-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {saving ? 'Registrando...' : 'Confirmar Fechamento'}
               </button>
             </div>
           </div>
