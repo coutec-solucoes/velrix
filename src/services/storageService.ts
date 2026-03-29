@@ -114,7 +114,7 @@ function toSnakeCase(obj: Record<string, any>): Record<string, any> {
 
 // Columns that exist only client-side and must NOT be sent to Supabase
 const STRIP_COLUMNS: Record<string, Set<string>> = {
-  cash_movements: new Set(['user_id', 'user_name']),
+  // we used to strip user_id and user_name from cash_movements here, but they are now required in the database
 };
 
 function filterForTable(table: string, row: Record<string, any>): Record<string, any> {

@@ -182,7 +182,7 @@ export default function BankAccountMovements({ account, allAccounts, onClose }: 
             <table className="w-full text-body-sm">
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
+                  <th className="text-left p-3 font-medium text-muted-foreground whitespace-nowrap">Data e Hora</th>
                   <th className="text-left p-3 font-medium text-muted-foreground">Descrição</th>
                   <th className="text-left p-3 font-medium text-muted-foreground">Usuário</th>
                   <th className="text-center p-3 font-medium text-muted-foreground">Tipo</th>
@@ -193,11 +193,11 @@ export default function BankAccountMovements({ account, allAccounts, onClose }: 
               <tbody>
                 {filtered.map(m => (
                   <tr key={m.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="p-3 text-muted-foreground whitespace-nowrap">
-                      {new Date(m.date).toLocaleDateString('pt-BR')}
+                    <td className="p-3 text-muted-foreground whitespace-nowrap text-xs">
+                      {new Date(m.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="p-3 text-body font-medium">{m.description || '—'}</td>
-                    <td className="p-3 text-xs text-muted-foreground">{m.userName || 'Sistema'}</td>
+                    <td className="p-3 text-xs text-muted-foreground font-semibold">{m.userName || 'Sistema'}</td>
                     <td className="p-3 text-center">
                       <span className="inline-flex items-center gap-1.5">{typeIcon(m.type)} {typeLabel(m.type)}</span>
                     </td>
