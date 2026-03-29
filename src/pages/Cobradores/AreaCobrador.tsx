@@ -354,6 +354,7 @@ export default function AreaCobrador() {
   const paidTodayTxs = useMemo(() => {
     if (!cobrador) return [];
     return transactions.filter(t => {
+      if (t.type === 'despesa') return false;
       if (t.cobradorId !== cobrador.id || t.status !== 'pago' || !t.paidAt) return false;
       const txPaidDate = t.paidAt.split('T')[0];
       return txPaidDate === fechamentoDate;
