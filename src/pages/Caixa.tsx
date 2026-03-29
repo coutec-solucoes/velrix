@@ -50,6 +50,7 @@ export default function Caixa() {
   const [filterPendingCurrency, setFilterPendingCurrency] = useState('');
   const [filterDueDays, setFilterDueDays] = useState<'' | '7' | '15' | '30' | '60'>('');
   const [activeTab, setActiveTab] = useState<'movimentos' | 'pendentes'>('movimentos');
+  const [hideInternalTransfers, setHideInternalTransfers] = useState(true);
   const { t } = useTranslation();
   const { user } = useAuth();
   const { canEdit: canEditCaixa, canDelete: canDeleteCaixa } = usePermissions();
@@ -73,12 +74,21 @@ export default function Caixa() {
 
   const filtered = useMemo(() => {
     return movements
+      .filter(m => {
+         // Se estiver vendo Todas as Contas e o filtro para esconder repasses estiver ativo
+         if (!filterBankAccount && hideInternalTransfers) {
+           if (m.description.includes('Repasse de Fechamento') || m.description.includes('Recebimento Ref. Fechamento')) {
+             return false;
+           }
+         }
+         return true;
+      })
       .filter(m => (!dateFrom || m.date >= dateFrom) && (!dateTo || m.date <= dateTo))
       .filter(m => !filterBankAccount || m.bankAccountId === filterBankAccount)
       .filter(m => !filterType || m.type === filterType)
       .filter(m => !filterPaymentMethod || m.paymentMethod === filterPaymentMethod)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [movements, dateFrom, dateTo, filterBankAccount, filterType]);
+  }, [movements, dateFrom, dateTo, filterBankAccount, filterType, filterPaymentMethod, hideInternalTransfers]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -471,6 +481,22 @@ export default function Caixa() {
               >
                 Limpar filtros
               </button>
+            )}
+
+            {/* Toggle de Ocultar Repasses Internos (Só aparece se estiver em Todas as contas) */}
+            {!filterBankAccount && (
+              <div className="flex items-center gap-2 ml-auto lg:ml-4">
+                <input 
+                  type="checkbox" 
+                  id="hideTransfers" 
+                  checked={hideInternalTransfers} 
+                  onChange={e => setHideInternalTransfers(e.target.checked)} 
+                  className="rounded text-secondary focus:ring-secondary border-border"
+                />
+                <label htmlFor="hideTransfers" className="text-body-sm text-muted-foreground cursor-pointer select-none">
+                  Ocultar Repasses de Fechamento
+                </label>
+              </div>
             )}
           </div>
 
