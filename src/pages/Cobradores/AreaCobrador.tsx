@@ -5,7 +5,7 @@ import { Transaction, Client, BankAccount, Currency } from '@/types';
 import { updateData, addData, getAppData } from '@/services/storageService';
 import { formatCurrency, formatDate, getStatusColor } from '@/utils/formatters';
 import { useSyncToast } from '@/hooks/useSyncToast';
-import { CheckCircle, Clock, CheckSquare, Square, Search, X, Loader2, Calendar, ClipboardList, Wallet, Landmark, CreditCard, Banknote, QrCode, Printer } from 'lucide-react';
+import { CheckCircle, Clock, CheckSquare, Square, Search, X, Loader2, Calendar, ClipboardList, Wallet, Landmark, CreditCard, Banknote, QrCode, Printer, ArrowUpCircle } from 'lucide-react';
 import ReceiptPrint, { ReceiptData } from '@/components/ReceiptPrint';
 import { convertAmount, conversionDescription } from '@/utils/currencyConversion';
 
@@ -600,48 +600,101 @@ export default function AreaCobrador() {
             <p className="text-sm">Data: {formatDate(fechamentoDate)}</p>
           </div>
 
-          <div className="mb-6 border-b border-border pb-6">
-            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Banknote size={18} /> Resumo Físico (Dinheiro Real)</h3>
+          <div className="mb-6 pb-2">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Banknote size={18} /> Resumo Físico e Conciliação</h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-              <div className="bg-card rounded-lg p-4 border border-border border-dashed">
-                <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Total Arrecadado (Bruto)</p>
-                {Object.entries(groupedCash.cash).map(([cur, amount]) => (
-                  <p key={cur} className="font-semibold text-sm mb-1">{formatCurrency(amount, cur as Currency)}</p>
-                ))}
-                {Object.keys(groupedCash.cash).length === 0 && <p className="text-sm font-medium">Nenhum valor em espécie</p>}
-              </div>
+            {(() => {
+              const cashCurrencies = Array.from(new Set([
+                ...Object.keys(groupedCash.cash),
+                ...Object.keys(groupedSangrias),
+                ...myCaixas.map(c => c.currency)
+              ]));
+              
+              if (cashCurrencies.length === 0) {
+                return (
+                  <div className="bg-card rounded-lg p-6 border border-border border-dashed text-center mb-6">
+                    <p className="text-sm font-medium text-muted-foreground">Nenhuma movimentação física registrada ou caixas habilitados.</p>
+                  </div>
+                );
+              }
+              
+              return cashCurrencies.map(currency => {
+                const txs = paidTodayTxs.filter(t => (t.paymentMethod || 'dinheiro') === 'dinheiro' && t.currency === currency);
+                const sangrias = todaysSangrias.filter(s => s.currency === currency);
+                const totalArrecadado = groupedCash.cash[currency] || 0;
+                const totalSangrias = groupedSangrias[currency] || 0;
+                const caixa = myCaixas.find(c => c.currency === currency);
+                
+                return (
+                  <div key={currency} className="mb-6 rounded-xl border border-border overflow-hidden card-shadow print:shadow-none print:border-black">
+                    <div className="bg-muted p-4 border-b border-border flex flex-col md:flex-row items-center justify-between gap-4 print:bg-transparent">
+                      <h4 className="font-bold text-lg flex items-center gap-2 uppercase tracking-wide">
+                        <Banknote className="text-success print:text-black" /> {currency} (Em Espécie)
+                      </h4>
+                      <div className="flex flex-wrap justify-center gap-3 sm:gap-6 text-sm font-medium">
+                        <div className="text-center px-2">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1 print:text-black">Recebido (Bruto)</p>
+                          <p className="text-success font-bold print:text-black">{formatCurrency(totalArrecadado, currency as Currency)}</p>
+                        </div>
+                        <div className="text-center px-2">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1 print:text-black">Despesas</p>
+                          <p className="text-destructive font-bold print:text-black">-{formatCurrency(totalSangrias, currency as Currency)}</p>
+                        </div>
+                        <div className="text-center bg-card rounded-lg px-4 py-1.5 shadow-sm border border-border/50 print:bg-transparent print:border-black">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1 print:text-black">Líquido a Entregar</p>
+                          <p className="text-lg font-black text-foreground print:text-black">{formatCurrency(caixa?.currentBalance || 0, currency as Currency)}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6 bg-card print:bg-transparent">
+                       <div>
+                          <h5 className="text-xs font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2 border-b border-border/40 pb-2 print:text-black print:border-black"><CheckCircle size={14} className="text-success print:text-black"/> Lista de Recebimentos</h5>
+                          {txs.length === 0 ? <p className="text-xs text-muted-foreground italic print:text-black">Nenhum recebimento.</p> : (
+                             <ul className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar print:max-h-none print:overflow-visible">
+                               {txs.map(t => (
+                                  <li key={t.id} className="flex justify-between items-center text-xs border-b border-border/30 pb-1.5 hover:bg-muted/30 transition-colors print:border-black">
+                                    <span className="truncate pr-2 font-medium print:text-black" title={t.description || t.clientName || 'Cobrança'}>
+                                      {t.clientName || 'Cliente'} {t.installments > 1 ? `(${t.currentInstallment}/${t.installments})` : ''}
+                                    </span>
+                                    <span className="font-bold text-success tabular-nums print:text-black">{formatCurrency(t.amount, currency as Currency)}</span>
+                                  </li>
+                               ))}
+                             </ul>
+                          )}
+                       </div>
+                       
+                       <div>
+                          <h5 className="text-xs font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2 border-b border-border/40 pb-2 print:text-black print:border-black"><ArrowUpCircle size={14} className="text-destructive print:text-black"/> Lista de Sangrias e Despesas</h5>
+                          {sangrias.length === 0 ? <p className="text-xs text-muted-foreground italic print:text-black">Nenhuma despesa declarada.</p> : (
+                             <ul className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar print:max-h-none print:overflow-visible">
+                               {sangrias.map(s => (
+                                  <li key={s.id} className="flex justify-between items-center text-xs border-b border-border/30 pb-1.5 hover:bg-muted/30 transition-colors print:border-black">
+                                    <span className="truncate pr-2 font-medium print:text-black" title={s.description || 'Despesa/Sangria'}>{s.description || 'Despesa'}</span>
+                                    <span className="font-bold text-destructive tabular-nums print:text-black">-{formatCurrency(s.amount, currency as Currency)}</span>
+                                  </li>
+                               ))}
+                             </ul>
+                          )}
+                       </div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
 
-              <div className="bg-card rounded-lg p-4 border border-border border-dashed">
-                <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Total Sangrias (Despesas)</p>
-                {Object.entries(groupedSangrias).map(([cur, amount]) => (
-                  <p key={cur} className="font-semibold text-sm text-warning mb-1">-{formatCurrency(amount, cur as Currency)}</p>
-                ))}
-                {Object.keys(groupedSangrias).length === 0 && <p className="text-sm font-medium">Nenhuma sangria</p>}
+            {myCaixas.length === 0 && (
+              <div className="mb-6 p-4 border border-dashed rounded-lg bg-muted/30 text-center">
+                <p className="text-muted-foreground text-sm">Você não possui um "Caixa Físico" habilitado em seu nome para nenhuma moeda. Solicite ao administrador.</p>
               </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground mb-3 font-medium">Líquido na Mochila (Valor que deve ser entregue fisicamente):</p>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {myCaixas.map((caixa) => (
-                <div key={caixa.id} className="bg-card rounded-lg p-4 border border-border card-shadow align-middle">
-                  <p className="text-sm text-muted-foreground font-medium uppercase">{caixa.currency}</p>
-                  <p className={`text-xl font-bold ${caixa.currentBalance > 0 ? 'text-success' : ''}`}>
-                    {formatCurrency(caixa.currentBalance, caixa.currency)}
-                  </p>
-                </div>
-              ))}
-              {myCaixas.length === 0 && (
-                <p className="text-muted-foreground text-sm py-2 col-span-2">Você não possui um "Caixa Físico" habilitado em seu nome.</p>
-              )}
-            </div>
+            )}
             {myCaixas.some(c => c.currentBalance > 0) && (
               <button 
                 onClick={handleFechamentoDefinitivo}
                 disabled={saving}
-                className="w-full bg-success text-success-foreground font-bold py-3 rounded-xl card-shadow hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
+                className="w-full mb-2 bg-success text-success-foreground font-bold py-3.5 rounded-xl card-shadow hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2 print:hidden"
               >
-                <CheckCircle size={20} /> Entregar Valores (Esvaziar Caixa e Repassar)
+                <CheckCircle size={20} /> Entregar Valores (Esvaziar Caixas e Repassar)
               </button>
             )}
           </div>
