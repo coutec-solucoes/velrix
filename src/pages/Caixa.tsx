@@ -32,6 +32,7 @@ export default function Caixa() {
   const [transactions, refreshTransactions] = useRealtimeData('transactions');
   const [bankAccounts] = useRealtimeData('bankAccounts');
   const [clients] = useRealtimeData('clients');
+  const [cobradores] = useRealtimeData('cobradores');
   const [activeCurrencies, setActiveCurrencies] = useState<Currency[]>(['BRL']);
   const [showModal, setShowModal] = useState(false);
   const [showBaixaModal, setShowBaixaModal] = useState(false);
@@ -50,7 +51,7 @@ export default function Caixa() {
   const [filterPendingCurrency, setFilterPendingCurrency] = useState('');
   const [filterDueDays, setFilterDueDays] = useState<'' | '7' | '15' | '30' | '60'>('');
   const [activeTab, setActiveTab] = useState<'movimentos' | 'pendentes'>('movimentos');
-  const [hideInternalTransfers, setHideInternalTransfers] = useState(true);
+  const [hideCobradores, setHideCobradores] = useState(true);
   const { t } = useTranslation();
   const { user } = useAuth();
   const { canEdit: canEditCaixa, canDelete: canDeleteCaixa } = usePermissions();
@@ -72,12 +73,20 @@ export default function Caixa() {
     setActiveCurrencies(getUIShownCurrencies());
   }, []);
 
+  const companyAccountIds = useMemo(() => {
+    return bankAccounts
+      .filter(a => !cobradores.some(c => a.name.includes(c.name) && a.accountType === 'caixa'))
+      .map(a => a.id);
+  }, [bankAccounts, cobradores]);
+
   const filtered = useMemo(() => {
     return movements
       .filter(m => {
-         // Se estiver vendo Todas as Contas e o filtro para esconder repasses estiver ativo
-         if (!filterBankAccount && hideInternalTransfers) {
-           if (m.description.includes('Repasse de Fechamento') || m.description.includes('Recebimento Ref. Fechamento')) {
+         // Se estiver vendo Todas as Contas e o filtro para esconder caixas de cobradores estiver ativo
+         if (!filterBankAccount && hideCobradores) {
+           // Oculta tudo que não for conta da empresa (ex: oculta baixas e sangrias do caixa JV VITOR)
+           // Assim, o Financeiro só vê os "Repasses de Fechamento" que caem nas contas da Empresa
+           if (m.bankAccountId && !companyAccountIds.includes(m.bankAccountId)) {
              return false;
            }
          }
@@ -88,7 +97,7 @@ export default function Caixa() {
       .filter(m => !filterType || m.type === filterType)
       .filter(m => !filterPaymentMethod || m.paymentMethod === filterPaymentMethod)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [movements, dateFrom, dateTo, filterBankAccount, filterType, filterPaymentMethod, hideInternalTransfers]);
+  }, [movements, dateFrom, dateTo, filterBankAccount, filterType, filterPaymentMethod, hideCobradores, companyAccountIds]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -483,18 +492,18 @@ export default function Caixa() {
               </button>
             )}
 
-            {/* Toggle de Ocultar Repasses Internos (Só aparece se estiver em Todas as contas) */}
+            {/* Toggle de Ocultar Caixas dos Cobradores (Só aparece se estiver em Todas as contas) */}
             {!filterBankAccount && (
               <div className="flex items-center gap-2 ml-auto lg:ml-4">
                 <input 
                   type="checkbox" 
-                  id="hideTransfers" 
-                  checked={hideInternalTransfers} 
-                  onChange={e => setHideInternalTransfers(e.target.checked)} 
+                  id="hideCobradoresCheck" 
+                  checked={hideCobradores} 
+                  onChange={e => setHideCobradores(e.target.checked)} 
                   className="rounded text-secondary focus:ring-secondary border-border"
                 />
-                <label htmlFor="hideTransfers" className="text-body-sm text-muted-foreground cursor-pointer select-none">
-                  Ocultar Repasses de Fechamento
+                <label htmlFor="hideCobradoresCheck" className="text-body-sm text-muted-foreground cursor-pointer select-none">
+                  Ocultar Caixas de Cobradores (Ver Líquido)
                 </label>
               </div>
             )}
