@@ -59,11 +59,33 @@ export default function AreaCobrador() {
 
   const myCaixas = useMemo(() => {
     if (!cobrador) return [];
-    return bankAccounts.filter(a => a.accountType === 'caixa' && a.name.includes(cobrador.name));
-  }, [bankAccounts, cobrador]);
+    
+    // Filtra parcelas pagas pelo cobrador em ESPÉCIE que não foram repassadas ao banco da matriz
+    const txAbertas = transactions.filter(tx => 
+      tx.status === 'pago' && 
+      tx.cobradorId === cobrador.id && 
+      !tx.fechamentoId && 
+      tx.paymentMethod === 'dinheiro'
+    );
+
+    const saldosPorMoeda: Record<string, number> = {};
+    txAbertas.forEach(tx => {
+      if (!saldosPorMoeda[tx.currency]) saldosPorMoeda[tx.currency] = 0;
+      if (tx.type === 'receita' || tx.type === 'investimento') saldosPorMoeda[tx.currency] += tx.amount;
+      else if (tx.type === 'despesa' || tx.type === 'retirada') saldosPorMoeda[tx.currency] -= tx.amount;
+    });
+
+    return Object.entries(saldosPorMoeda).map(([currency, balance]) => ({
+      id: `mochila-${currency}`,
+      name: `Mochila ${cobrador.name} - ${currency}`,
+      currency: currency as Currency,
+      currentBalance: balance,
+      txs: txAbertas.filter(t => t.currency === currency)
+    }));
+  }, [transactions, cobrador]);
 
   const companyAccounts = useMemo(() => {
-    return bankAccounts.filter(a => !cobradores.some(c => a.name.includes(c.name)));
+    return bankAccounts.filter(a => !cobradores.some(c => a.name.includes(c.name) && a.accountType === 'caixa'));
   }, [bankAccounts, cobradores]);
 
   const activeCaixas = useMemo(() => myCaixas.filter(c => c.currentBalance > 0), [myCaixas]);
@@ -90,10 +112,11 @@ export default function AreaCobrador() {
       }
     }
 
-    if (!window.confirm("Atenção! Isso irá transferir TODO o saldo em espécie para as contas selecionadas. Confirmar fechamento?")) return;
+    if (!window.confirm("Atenção! Isso irá transferir TODO o saldo em espécie do Lote de hoje para as contas selecionadas. Confirmar fechamento?")) return;
     setSaving(true);
     try {
       const date = new Date().toISOString().split('T')[0];
+      const loteId = crypto.randomUUID();
       
       for (const caixa of activeCaixas) {
         const destAccountId = fechamentoDestinations[caixa.id];
@@ -102,44 +125,37 @@ export default function AreaCobrador() {
         if (!targetMainCaixa) continue;
 
         const amountToTransfer = caixa.currentBalance;
-
-        // Saída do Caixa do Cobrador
-        await addData('cashMovements', {
-          id: crypto.randomUUID(),
-          bankAccountId: caixa.id,
-          type: 'saida',
-          amount: amountToTransfer,
-          currency: caixa.currency,
-          description: `Repasse de Fechamento de Caixa`,
-          date, userId: user?.id, userName: user?.name || cobrador?.name,
-          cobradorId: cobrador?.id,
-          createdAt: new Date().toISOString()
-        });
-        await updateData('bankAccounts', caixa.id, { currentBalance: 0 } as any);
-
-        // Entrada no Caixa Principal
         const conv = convertAmount(amountToTransfer, caixa.currency, targetMainCaixa.currency);
+
+        // 1. Marca todas as transações da mochila desta moeda como "Fechadas" nesse lote
+        const txIds = caixa.txs.map((t: any) => t.id);
+        for (const tid of txIds) {
+          await updateData('transactions', tid, { fechamentoId: loteId } as any);
+        }
+
+        // 2. Cria UM movimento de Entrada no Caixa da Empresa (O Dinheiro Vivo finalmente caiu na conta!)
         await addData('cashMovements', {
           id: crypto.randomUUID(),
           bankAccountId: targetMainCaixa.id,
           type: 'entrada',
           amount: conv.convertedAmount,
           currency: targetMainCaixa.currency,
-          description: `Recebimento Ref. Fechamento: ${cobrador?.name}`,
-          date, userId: user?.id, userName: user?.name,
+          description: `Repasse Dinheiro Fisico: Lote ${loteId.substring(0,6)}`,
+          date, userId: user?.id, userName: user?.name || cobrador?.name,
+          cobradorId: cobrador?.id,
           createdAt: new Date().toISOString()
         });
         await updateData('bankAccounts', targetMainCaixa.id, { currentBalance: targetMainCaixa.currentBalance + conv.convertedAmount } as any);
         
-        // Log do Fechamento
+        // 3. Registra Log de Auditoria
         await addData('auditLogs', {
           id: crypto.randomUUID(),
           action: 'fechamento_caixa',
-          transactionDescription: `Definitivo de: ${caixa.name} para ${targetMainCaixa.name}`,
+          transactionDescription: `Fechamento Lote Físico (${caixa.currency}) -> ${targetMainCaixa.name}`,
           amount: amountToTransfer,
           currency: caixa.currency,
-          bankAccountId: caixa.id,
-          bankAccountName: caixa.name,
+          bankAccountId: targetMainCaixa.id,
+          bankAccountName: targetMainCaixa.name,
           userId: user?.id || '',
           userName: user?.name || '',
           date,
@@ -147,7 +163,7 @@ export default function AreaCobrador() {
           createdAt: new Date().toISOString(),
         });
       }
-      showSyncResult({ success: true, localOnly: false }, 'Caixas físicos esvaziados e dinheiro repassado!');
+      showSyncResult({ success: true, localOnly: false }, 'Mochilas esvaziadas e dinheiro digitalizado no Caixa da Empresa!');
       setShowFechamentoModal(false);
     } finally { setSaving(false); }
   };
@@ -177,86 +193,51 @@ export default function AreaCobrador() {
   const handleBaixaClick = (tx: Transaction) => {
     setBaixaTx(tx);
     setPaymentMethod('dinheiro');
-    // Default to the cobrador's specific caixa if found, based on original currency
-    const cobradorCaixa = bankAccounts.find(a => a.accountType === 'caixa' && a.name.includes(cobrador?.name || '') && a.currency === tx.currency);
-    const fallbackCaixa = bankAccounts.find(a => a.accountType === 'caixa');
-    
-    if (cobradorCaixa) {
-      setBankAccountId(cobradorCaixa.id);
-    } else if (fallbackCaixa) {
-      setBankAccountId(fallbackCaixa.id);
-    } else {
-      setBankAccountId('');
-    }
+    // Para dinheiro não preencherei banco (fica na mochila)
+    setBankAccountId('');
     setShowBaixaModal(true);
   };
 
   const handleSangriaClick = () => {
-    // Default to cobrador's caixa for PYG or BRL
-    const fallbackCaixa = bankAccounts.find(a => a.accountType === 'caixa' && a.name.includes(cobrador?.name || ''));
-    setSangriaForm({ amount: '', currency: fallbackCaixa?.currency || 'BRL', description: '', bankAccountId: fallbackCaixa?.id || '' });
+    setSangriaForm({ amount: '', currency: 'BRL', description: '', bankAccountId: '' });
     setShowSangriaModal(true);
   };
 
   const confirmSangria = async () => {
-    if (!sangriaForm.amount || !sangriaForm.description || !sangriaForm.bankAccountId) return;
+    if (!sangriaForm.amount || !sangriaForm.description || !sangriaForm.currency) return;
     setSavingSangria(true);
     try {
-      const selectedAccount = bankAccounts.find(a => a.id === sangriaForm.bankAccountId);
-      if (!selectedAccount) return;
-      
       const numAmount = parseFloat(sangriaForm.amount);
       const date = new Date().toISOString().split('T')[0];
-      
       const txId = crypto.randomUUID();
 
-      // 1. Create a formal transaction of type 'despesa' so it shows up in Financial Reports
+      // Sangria é apenas uma Transação Não Fechada que irá subtrair no Lote (Mochila)
       await addData('transactions', {
         id: txId,
         type: 'despesa',
-        description: `Sangria/Despesa na Rua: ${sangriaForm.description}`,
+        description: `Sangria na Rua: ${sangriaForm.description}`,
         amount: numAmount,
-        currency: selectedAccount.currency,
+        currency: sangriaForm.currency as Currency,
         category: 'Despesa de Cobrador',
         dueDate: date,
         status: 'pago',
         paidAt: date,
-        paymentMethod: 'dinheiro', // Sangrias from cobrador are usually cash
-        bankAccountId: selectedAccount.id,
+        paymentMethod: 'dinheiro', // Requisito para entrar na Mochila
+        bankAccountId: undefined,  // Não registra em banco
+        fechamentoId: undefined,   // Segura em estado Aberto
         cobradorId: cobrador?.id,
-        // userId: user?.id, -> Removido pois column 'user_id' não existe na tabela transactions (apenas na cash_movements)
         createdAt: new Date().toISOString(),
       });
 
-      // 2. Add the cash movement representing the physical money leaving the backpack
-      await addData('cashMovements', {
-        id: crypto.randomUUID(),
-        transactionId: txId,
-        bankAccountId: selectedAccount.id,
-        type: 'saida',
-        amount: numAmount,
-        currency: selectedAccount.currency,
-        description: `Sangria: ${sangriaForm.description}`,
-        date: date,
-        userId: user?.id,
-        userName: user?.name || cobrador?.name,
-        cobradorId: cobrador?.id,
-        createdAt: new Date().toISOString(),
-      });
-      
-      // 3. Update the cobrador's specific physical account balance
-      await updateData('bankAccounts', selectedAccount.id, { currentBalance: selectedAccount.currentBalance - numAmount } as any);
-      
-      // 4. Log the action
       await addData('auditLogs', {
         id: crypto.randomUUID(),
         action: 'despesa',
         transactionId: txId,
         transactionDescription: `Sangria: ${sangriaForm.description}`,
         amount: numAmount,
-        currency: selectedAccount.currency,
-        bankAccountId: selectedAccount.id,
-        bankAccountName: selectedAccount.name,
+        currency: sangriaForm.currency,
+        bankAccountId: '',
+        bankAccountName: 'Mochila Virtual',
         userId: user?.id || '',
         userName: user?.name || '',
         date: date,
@@ -264,7 +245,7 @@ export default function AreaCobrador() {
         createdAt: new Date().toISOString(),
       });
 
-      showSyncResult({ success: true, localOnly: false }, 'Sangria registrada com sucesso');
+      showSyncResult({ success: true, localOnly: false }, 'Sangria registrada com sucesso, descontada da sua mochila!');
       setShowSangriaModal(false);
     } finally {
       setSavingSangria(false);
@@ -273,18 +254,35 @@ export default function AreaCobrador() {
 
   const confirmBaixa = async () => {
     if (!baixaTx) return;
+    
+    if (paymentMethod !== 'dinheiro' && !bankAccountId) {
+       alert('Selecione uma conta bancária de destino para transferências que já vão direto ao banco (PIX, TED, Cartão).');
+       return;
+    }
+
     setSaving(true);
     try {
       const date = new Date().toISOString().split('T')[0];
-      await updateData('transactions', baixaTx.id, {
+      
+      const payload: any = {
         status: 'pago',
         paidAt: date,
         paymentMethod: paymentMethod,
-        bankAccountId: bankAccountId || undefined,
         cobradorId: cobrador?.id
-      } as any);
+      };
 
-      if (bankAccountId) {
+      if (paymentMethod !== 'dinheiro') {
+         payload.bankAccountId = bankAccountId;
+         payload.fechamentoId = `digital_${crypto.randomUUID()}`; // Transações digitais já nascem fechadas
+      } else {
+         payload.bankAccountId = null; // Fica na mochila
+         payload.fechamentoId = null; 
+      }
+
+      await updateData('transactions', baixaTx.id, payload);
+
+      // SÓ cria movimentação de caixa se NÃO for dinheiro (já que dinheiro vai pra mochila)
+      if (paymentMethod !== 'dinheiro' && bankAccountId) {
         const acc = bankAccounts.find(a => a.id === bankAccountId);
         const movType = (baixaTx.type === 'receita' || baixaTx.type === 'investimento') ? 'entrada' : 'saida';
         const conv = acc ? convertAmount(baixaTx.amount, baixaTx.currency, acc.currency) : null;
@@ -299,20 +297,21 @@ export default function AreaCobrador() {
           type: movType,
           amount: movAmount,
           currency: movCurrency,
-          description: `Baixa (Cobrador): ${baixaTx.description}${convDesc}`,
+          description: `Baixa Digital (Cobrador): ${baixaTx.description}${convDesc}`,
           date: date,
           userId: user?.id,
           userName: user?.name || cobrador?.name,
           cobradorId: cobrador?.id,
           createdAt: new Date().toISOString(),
         });
+        
         if (acc) {
           const delta = movType === 'entrada' ? movAmount : -movAmount;
           await updateData('bankAccounts', acc.id, { currentBalance: acc.currentBalance + delta } as any);
         }
       }
 
-      const acc = bankAccounts.find(a => a.id === bankAccountId);
+      const acc = bankAccountId ? bankAccounts.find(a => a.id === bankAccountId) : null;
       const auditConv = acc ? convertAmount(baixaTx.amount, baixaTx.currency, acc.currency) : null;
 
       await addData('auditLogs', {
@@ -325,7 +324,7 @@ export default function AreaCobrador() {
         amount: baixaTx.amount,
         currency: baixaTx.currency,
         bankAccountId: bankAccountId || '',
-        bankAccountName: acc?.name || '',
+        bankAccountName: acc?.name || 'Mochila Físico',
         userId: user?.id || '',
         userName: user?.name || '',
         date: date,
@@ -386,14 +385,12 @@ export default function AreaCobrador() {
   
   const todaysSangrias = useMemo(() => {
     if (!cobrador) return [];
-    return cashMovements.filter(m => {
-      if (m.type !== 'saida') return false;
-      // Filter by the description we use for sangrias OR by the user's name just in case
-      const isSangria = (m.description?.toLowerCase()?.includes('sangria') || m.description?.toLowerCase()?.includes('despesa'));
-      const txDate = m.date?.split('T')[0] || m.createdAt.split('T')[0];
-      return isSangria && txDate === fechamentoDate && (m.cobradorId === cobrador.id || m.userName === (user?.name || cobrador.name));
+    return transactions.filter(t => {
+      if (t.type !== 'despesa') return false;
+      const txDate = t.paidAt?.split('T')[0] || t.createdAt.split('T')[0];
+      return t.status === 'pago' && txDate === fechamentoDate && t.cobradorId === cobrador.id && t.paymentMethod === 'dinheiro';
     });
-  }, [cashMovements, cobrador, fechamentoDate, user]);
+  }, [transactions, cobrador, fechamentoDate]);
   
   const totalPaidToday = useMemo(() => {
     return paidTodayTxs.reduce((sum, tx) => sum + tx.amount, 0);
@@ -712,7 +709,7 @@ export default function AreaCobrador() {
 
             {myCaixas.length === 0 && (
               <div className="mb-6 p-4 border border-dashed rounded-lg bg-muted/30 text-center">
-                <p className="text-muted-foreground text-sm">Você não possui um "Caixa Físico" habilitado em seu nome para nenhuma moeda. Solicite ao administrador.</p>
+                <p className="text-muted-foreground text-sm flex items-center justify-center gap-2"><CheckCircle size={16} className="text-success" /> Sua mochila física / lote encontra-se vazia, sem saldo pendente em espécie.</p>
               </div>
             )}
             {myCaixas.some(c => c.currentBalance > 0) && (
@@ -902,40 +899,39 @@ export default function AreaCobrador() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2 text-foreground">
-                  Recebido em (Conta) <span className="text-destructive">*</span>
-                </label>
-                <select 
-                  value={bankAccountId} 
-                  onChange={(e) => setBankAccountId(e.target.value)}
-                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
-                >
-                  <option value="" disabled>Selecione a conta destino...</option>
-                  {bankAccounts
-                    .filter(a => paymentMethod === 'dinheiro' ? myCaixas.some(mc => mc.id === a.id) : a.accountType !== 'caixa')
-                    .map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
-                  ))}
-                </select>
-                {paymentMethod === 'dinheiro' && bankAccounts.some(a => a.accountType === 'caixa') && (
-                  <p className="text-xs text-muted-foreground mt-1">Sugerido: Conta classificada como Caixa Físico.</p>
-                )}
-                
-                {/* Live Currency Conversion Warning */}
-                {bankAccountId && bankAccounts.find(a => a.id === bankAccountId)?.currency !== baixaTx.currency && (
-                  <div className="mt-3 p-3 bg-warning/10 border border-warning/20 rounded-lg flex flex-col items-center">
-                    <p className="text-xs text-muted-foreground mb-1 uppercase font-semibold text-warning">A conversão será aplicada na baixa</p>
-                    <p className="text-lg font-bold text-warning">
-                      {formatCurrency(
-                        convertAmount(baixaTx.amount, baixaTx.currency, bankAccounts.find(a => a.id === bankAccountId)!.currency).convertedAmount,
-                        bankAccounts.find(a => a.id === bankAccountId)!.currency as any
-                      )}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-1">Baseado no câmbio configurado no sistema</p>
-                  </div>
-                )}
-              </div>
+              {paymentMethod !== 'dinheiro' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-foreground">
+                    Recebido em (Conta) <span className="text-destructive">*</span>
+                  </label>
+                  <select 
+                    value={bankAccountId} 
+                    onChange={(e) => setBankAccountId(e.target.value)}
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
+                  >
+                    <option value="" disabled>Selecione a conta destino...</option>
+                    {bankAccounts
+                      .filter(a => a.accountType !== 'caixa')
+                      .map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
+                    ))}
+                  </select>
+                  
+                  {/* Live Currency Conversion Warning */}
+                  {bankAccountId && bankAccounts.find(a => a.id === bankAccountId)?.currency !== baixaTx.currency && (
+                    <div className="mt-3 p-3 bg-warning/10 border border-warning/20 rounded-lg flex flex-col items-center">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase font-semibold text-warning">A conversão será aplicada na baixa</p>
+                      <p className="text-lg font-bold text-warning">
+                        {formatCurrency(
+                          convertAmount(baixaTx.amount, baixaTx.currency, bankAccounts.find(a => a.id === bankAccountId)!.currency).convertedAmount,
+                          bankAccounts.find(a => a.id === bankAccountId)!.currency as any
+                        )}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Baseado no câmbio configurado no sistema</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="flex gap-2 p-4 border-t border-border bg-muted/30">
@@ -949,7 +945,7 @@ export default function AreaCobrador() {
               <button 
                 type="button" 
                 onClick={confirmBaixa}
-                disabled={saving || !bankAccountId}
+                disabled={saving || (paymentMethod !== 'dinheiro' && !bankAccountId)}
                 className="flex-1 px-4 py-2 bg-success text-success-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {saving ? 'Confirmando...' : 'Confirmar e Receber'}
@@ -970,15 +966,19 @@ export default function AreaCobrador() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1 text-foreground">Retirar deste Caixa Físico</label>
+                <label className="block text-sm font-medium mb-1 text-foreground">Moeda da Sangria (Retirar da Mochila)</label>
                 <select 
-                  value={sangriaForm.bankAccountId} 
-                  onChange={(e) => setSangriaForm({...sangriaForm, bankAccountId: e.target.value})}
+                  value={sangriaForm.currency} 
+                  onChange={(e) => setSangriaForm({...sangriaForm, currency: e.target.value as any})}
                   className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-secondary outline-none transition-colors"
                 >
-                  <option value="" disabled>Selecione a conta...</option>
-                  {bankAccounts.filter(a => a.accountType === 'caixa' && a.name.includes(cobrador.name)).map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name} - {acc.currency}</option>
+                  <option value="" disabled>Selecione a moeda...</option>
+                  {myCaixas.map(mc => (
+                    <option key={mc.currency} value={mc.currency}>{mc.currency} (Baixado hoje: {formatCurrency(mc.currentBalance, mc.currency)})</option>
+                  ))}
+                  {/* Fallbacks para caso tentem sangrar sem ter recebido nada hoje ainda */}
+                  {['BRL', 'PYG', 'USD'].filter(curr => !myCaixas.some(m => m.currency === curr)).map(curr => (
+                    <option key={curr} value={curr}>{curr}</option>
                   ))}
                 </select>
               </div>
@@ -987,7 +987,7 @@ export default function AreaCobrador() {
                 <label className="block text-sm font-medium mb-1">Valor da Despesa</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
-                    {bankAccounts.find(a => a.id === sangriaForm.bankAccountId)?.currency || 'BRL'}
+                    {sangriaForm.currency || 'BRL'}
                   </span>
                   <input
                     type="number"

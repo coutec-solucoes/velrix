@@ -165,6 +165,7 @@ export interface Transaction {
   paymentMethod?: string;
   bankAccountId?: string;
   cobradorId?: string;
+  fechamentoId?: string;
   createdAt: string;
 }
 
